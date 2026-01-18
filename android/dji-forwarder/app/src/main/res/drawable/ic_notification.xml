@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <!-- Drone/Quadcopter icon -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M22,11V9L12,2L2,9V11H4V18H10V14H14V18H20V11H22ZM18,16H16V12H8V16H6V10.19L12,5.69L18,10.19V16Z"/>
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,9A1.5,1.5 0,0 1,13.5 10.5A1.5,1.5 0,0 1,12 12A1.5,1.5 0,0 1,10.5 10.5A1.5,1.5 0,0 1,12 9Z"/>
+</vector>
