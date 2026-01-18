@@ -1,0 +1,20 @@
+# Test Configuration for DJI Adapter
+
+server:
+  log_level: debug
+
+mavlink:
+  enabled: false
+
+dji:
+  enabled: true
+  listen_address: "127.0.0.1:14560"
+  max_clients: 10
+
+mqtt:
+  enabled: false
+
+throttle:
+  default_rate_hz: 1.0
+  min_rate_hz: 0.5
+  max_rate_hz: 10.0

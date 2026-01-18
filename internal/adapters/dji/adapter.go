@@ -211,7 +211,9 @@ func (a *Adapter) handleClient(ctx context.Context, conn net.Conn, events chan<-
 		case MessageTypeState:
 			a.handleState(client, &msg, events)
 		case MessageTypeHeartbeat:
-			// Just update lastSeen, already done above
+			// Send ACK for heartbeat
+			ack := Message{Type: "ack"}
+			a.sendMessage(client.conn, &ack)
 		default:
 			log.Printf("[DJI] Unknown message type from %s: %s", conn.RemoteAddr(), msg.Type)
 		}

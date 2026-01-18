@@ -6,10 +6,11 @@
 |------|-----|
 | 功能模块 | DJI Mobile SDK Android 转发端 |
 | 创建时间 | 2026-01-18 17:10 |
-| 最后更新 | 2026-01-18 17:10 |
+| 最后更新 | 2026-01-18 18:45 |
 | 作者 | Claude Code |
-| 状态 | 规划中 |
+| 状态 | **核心实现完成** |
 | 依赖版本 | v0.1.0 |
+| Git Commits | `6d52c74`, `6a347d4` |
 
 ## 目标
 
@@ -63,9 +64,75 @@ DJI 是私有协议，官方不公开通信细节。获取数据的可行方案�
 └─────────────────────────────────────────────────────────────┘
 ```
 
+## 实现进展汇总
+
+> 核心实现已完成，等待 DJI 开发者账号注册后集成真实 SDK。
+
+### 已完成 (2026-01-18 18:30)
+
+| 阶段 | 完成情况 | 备注 |
+|------|----------|------|
+| 阶段 5: Go DJI Adapter | ✅ 完成 | `internal/adapters/dji/` |
+| 阶段 3: 数据格式转换 | ✅ 完成 | Kotlin DroneState |
+| 阶段 4: 网络传输层 | ✅ 完成 | TCP Client + 重连机制 |
+| 阶段 6: Android UI | ✅ 完成 | Material Design 配置界面 |
+| 阶段 1: 环境准备 | ✅ 项目框架完成 | DJI SDK placeholder |
+| 阶段 2: 遥测数据采集 | ⏳ 等待 SDK | 模拟模式可用 |
+| 阶段 7: 测试与发布 | ⏳ 进行中 | 端到端测试中 |
+
+### Go 端实现 (`internal/adapters/dji/`)
+
+```
+internal/adapters/dji/
+├── adapter.go    # TCP Server + 多客户端管理
+├── protocol.go   # 消息协议定义
+└── client.go     # 客户端连接处理
+```
+
+**关键特性**:
+- 长度前缀 JSON 协议 (4 字节长度 + JSON 数据)
+- 多客户端并发处理
+- 心跳超时检测 (90 秒)
+- 自动 ACK 响应
+
+### Android 端实现 (`android/dji-forwarder/`)
+
+```
+app/src/main/java/com/outb/dji/
+├── model/
+│   ├── DroneState.kt        # 统一数据模型
+│   └── Message.kt           # 协议消息
+├── network/
+│   └── TcpClient.kt         # TCP 客户端 + 自动重连
+├── dji/
+│   └── DJIManager.kt        # DJI SDK 封装 + 模拟模式
+├── service/
+│   └── ForwarderService.kt  # 前台服务
+└── ui/
+    └── MainActivity.kt      # 配置界面
+```
+
+**关键特性**:
+- Kotlin + Coroutines 异步处理
+- kotlinx.serialization JSON 序列化
+- 自动重连机制 (指数退避)
+- 心跳保活 (30 秒)
+- 前台服务防止后台杀死
+- 模拟模式便于无硬件测试
+
+### 待完成
+
+1. **DJI SDK 真实集成**: 需注册 DJI 开发者账号获取 App Key
+2. **端到端测试**: Go 网关 + Android 模拟模式通信验证
+3. **APK 签名发布**: 生成 release APK
+
+---
+
 ## 开发阶段划分
 
 ### 阶段 1: 环境准备与 SDK 集成
+
+**状态**: ✅ 项目框架完成 | ⏳ SDK 集成等待开发者账号
 
 **预期产出**: 可运行的 Android 项目，能连接 DJI SDK
 
@@ -342,3 +409,7 @@ mkdir -p internal/adapters/dji
 | 时间 | 修改内容 | 修改者 |
 |------|----------|--------|
 | 2026-01-18 17:10 | 创建 v0.2 开发计划 | Claude Code |
+| 2026-01-18 17:30 | 完成 Go DJI Adapter (阶段 5) | Claude Code |
+| 2026-01-18 18:00 | 完成 Android 项目框架 (阶段 1, 3, 4, 6) | Claude Code |
+| 2026-01-18 18:30 | 完成 Android 完整实现，提交 Git | Claude Code |
+| 2026-01-18 18:45 | 更新进度文档，准备端到端测试 | Claude Code |
