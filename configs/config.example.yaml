@@ -14,6 +14,12 @@ mavlink:
   # serial_port: "/dev/ttyUSB0"
   # serial_baud: 57600
 
+# DJI Forwarder Adapter Configuration
+dji:
+  enabled: false
+  listen_address: "0.0.0.0:14560"  # TCP server for Android forwarder
+  max_clients: 10                   # Maximum concurrent DJI forwarder connections
+
 # MQTT Publisher Configuration
 mqtt:
   enabled: true

@@ -11,6 +11,7 @@ import (
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	MAVLink  MAVLinkConfig  `yaml:"mavlink"`
+	DJI      DJIConfig      `yaml:"dji"`
 	MQTT     MQTTConfig     `yaml:"mqtt"`
 	Throttle ThrottleConfig `yaml:"throttle"`
 }
@@ -27,6 +28,13 @@ type MAVLinkConfig struct {
 	Address        string `yaml:"address"`         // For UDP/TCP: "host:port"
 	SerialPort     string `yaml:"serial_port"`     // For serial: "/dev/ttyUSB0"
 	SerialBaud     int    `yaml:"serial_baud"`     // For serial: 57600
+}
+
+// DJIConfig contains DJI forwarder adapter settings
+type DJIConfig struct {
+	Enabled       bool   `yaml:"enabled"`
+	ListenAddress string `yaml:"listen_address"` // TCP listen address: "host:port"
+	MaxClients    int    `yaml:"max_clients"`    // Maximum concurrent clients
 }
 
 // MQTTConfig contains MQTT publisher settings
@@ -70,6 +78,12 @@ func Load(path string) (*Config, error) {
 	// Set defaults
 	if cfg.Server.LogLevel == "" {
 		cfg.Server.LogLevel = "info"
+	}
+	if cfg.DJI.ListenAddress == "" {
+		cfg.DJI.ListenAddress = "0.0.0.0:14560"
+	}
+	if cfg.DJI.MaxClients == 0 {
+		cfg.DJI.MaxClients = 10
 	}
 	if cfg.Throttle.DefaultRateHz == 0 {
 		cfg.Throttle.DefaultRateHz = 1.0

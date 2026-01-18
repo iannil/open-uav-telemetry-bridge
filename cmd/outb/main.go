@@ -8,13 +8,14 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/open-uav/telemetry-bridge/internal/adapters/dji"
 	"github.com/open-uav/telemetry-bridge/internal/adapters/mavlink"
 	"github.com/open-uav/telemetry-bridge/internal/config"
 	"github.com/open-uav/telemetry-bridge/internal/core"
 	"github.com/open-uav/telemetry-bridge/internal/publishers/mqtt"
 )
 
-const version = "0.1.0"
+const version = "0.2.0-dev"
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
@@ -50,6 +51,13 @@ func main() {
 		engine.RegisterAdapter(mavlinkAdapter)
 		log.Printf("MAVLink adapter registered (%s: %s)",
 			cfg.MAVLink.ConnectionType, cfg.MAVLink.Address)
+	}
+
+	if cfg.DJI.Enabled {
+		djiAdapter := dji.New(cfg.DJI)
+		engine.RegisterAdapter(djiAdapter)
+		log.Printf("DJI adapter registered (listen: %s, max clients: %d)",
+			cfg.DJI.ListenAddress, cfg.DJI.MaxClients)
 	}
 
 	// Register publishers
