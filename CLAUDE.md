@@ -6,7 +6,7 @@
 
 Open-UAV-Telemetry-Bridge (OUTB) 是一个协议无关的无人机遥测边缘网关。它在多种无人机协议（MAVLink、DJI、GB/T 28181）之间进行转换，并通过 MQTT、WebSocket、HTTP 或 gRPC 输出标准化数据。
 
-**当前状态**：v0.2.0-dev 开发中。MAVLink + DJI 双协议支持，Android 转发端已实现。
+**当前状态**：v0.3.0-dev 开发中。MAVLink + DJI 双协议支持，坐标转换，HTTP API。
 
 ## 构建命令
 
@@ -35,26 +35,19 @@ make clean
 │   ├── core/
 │   │   ├── interfaces.go               # Adapter/Publisher 接口定义
 │   │   ├── engine.go                   # 消息路由引擎
+│   │   ├── coordinator/                # 坐标系转换 (WGS84→GCJ02/BD09)
 │   │   ├── statestore/                 # 状态缓存
 │   │   └── throttler/                  # 频率控制
 │   ├── adapters/
 │   │   ├── mavlink/                    # MAVLink 南向适配器 (UDP/TCP/Serial)
 │   │   └── dji/                        # DJI 南向适配器 (TCP Server)
 │   ├── publishers/mqtt/                # MQTT 北向发布器
+│   ├── api/                            # HTTP REST API 服务器
 │   └── config/                         # YAML 配置管理
 ├── android/dji-forwarder/              # DJI Android 转发端 (Kotlin)
-│   └── app/src/main/java/com/outb/dji/
-│       ├── model/DroneState.kt         # 数据模型
-│       ├── network/TcpClient.kt        # TCP 客户端
-│       ├── dji/DJIManager.kt           # DJI SDK 封装
-│       ├── service/ForwarderService.kt # 前台服务
-│       └── ui/MainActivity.kt          # 配置界面
 ├── configs/config.example.yaml         # 示例配置
 ├── scripts/test_dji_client.go          # DJI 协议测试客户端
-├── release/v0.1/                       # 发布包
 ├── docs/                               # 文档
-│   ├── QUICKSTART.md                   # 快速开始指南
-│   └── progress/                       # 开发进度文档
 └── Makefile
 ```
 
@@ -67,9 +60,24 @@ make clean
 ├── MAVLink Adapter (UDP/TCP/Serial)
 └── DJI Adapter (TCP Server ← Android Forwarder)
     ↓ DroneState 事件
-核心处理层 (Engine → Throttler → StateStore)
+核心处理层
+├── Engine
+├── CoordinateConverter (WGS84 → GCJ02/BD09)
+├── Throttler
+└── StateStore
     ↓ 频率控制后的 DroneState
-北向发布层 (MQTT Publisher)
+北向发布层
+├── MQTT Publisher
+└── HTTP API (REST)
+```
+
+### HTTP API 接口
+
+```
+GET /health              # 健康检查
+GET /api/v1/status       # 网关状态
+GET /api/v1/drones       # 所有无人机列表
+GET /api/v1/drones/{id}  # 单个无人机详情
 ```
 
 ### DJI 通信协议
@@ -124,6 +132,8 @@ type Publisher interface {
 |------|-----|------|
 | MAVLink | `github.com/bluenviron/gomavlib/v3` | v3.3.0 |
 | MQTT | `github.com/eclipse/paho.mqtt.golang` | v1.5.1 |
+| HTTP 路由 | `github.com/go-chi/chi/v5` | v5.2.4 |
+| CORS | `github.com/go-chi/cors` | v1.2.2 |
 | 配置 | `gopkg.in/yaml.v3` | v3.0.1 |
 
 **Android 转发端**:
@@ -140,7 +150,7 @@ type Publisher interface {
 
 - [x] v0.1 (MVP)：MAVLink → MQTT，树莓派运行
 - [x] v0.2：DJI Mobile SDK Android 转发端 (核心完成，待 SDK 集成)
-- [ ] v0.3：坐标系转换 + HTTP API
+- [x] v0.3：坐标系转换 (WGS84→GCJ02/BD09) + HTTP API
 - [ ] v0.4：GB/T 28181 国标支持
 - [ ] v1.0：Web 管理界面
 
