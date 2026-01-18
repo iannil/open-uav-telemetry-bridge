@@ -34,6 +34,24 @@ mqtt:
     topic: "uav/status"
     message: "offline"
 
+# GB/T 28181 National Standard Publisher Configuration
+gb28181:
+  enabled: false
+  device_id: "34020000001320000001"    # 20-digit device code
+  device_name: "UAV-Gateway-001"       # Display name
+  local_ip: "192.168.1.100"            # Local SIP address
+  local_port: 5060                     # Local SIP port
+  server_id: "34020000002000000001"    # Platform SIP server ID
+  server_ip: "192.168.1.1"             # Platform SIP server IP
+  server_port: 5060                    # Platform SIP port
+  server_domain: "3402000000"          # SIP domain (first 10 digits of server_id)
+  username: "34020000001320000001"     # SIP auth username (usually same as device_id)
+  password: "password123"              # SIP auth password
+  transport: udp                       # udp | tcp
+  register_expires: 3600               # REGISTER expiry in seconds
+  heartbeat_interval: 60               # Keepalive interval in seconds
+  position_interval: 5                 # Position report interval in seconds
+
 # HTTP API Configuration
 http:
   enabled: true

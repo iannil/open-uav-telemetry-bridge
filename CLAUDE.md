@@ -6,7 +6,7 @@
 
 Open-UAV-Telemetry-Bridge (OUTB) 是一个协议无关的无人机遥测边缘网关。它在多种无人机协议（MAVLink、DJI、GB/T 28181）之间进行转换，并通过 MQTT、WebSocket、HTTP 或 gRPC 输出标准化数据。
 
-**当前状态**：v0.3.0-dev 开发中。MAVLink + DJI 双协议支持，坐标转换，HTTP API。
+**当前状态**：v0.4.0-dev 开发中。MAVLink + DJI 双协议支持，坐标转换，HTTP API，GB/T 28181 国标支持。
 
 ## 构建命令
 
@@ -41,12 +41,16 @@ make clean
 │   ├── adapters/
 │   │   ├── mavlink/                    # MAVLink 南向适配器 (UDP/TCP/Serial)
 │   │   └── dji/                        # DJI 南向适配器 (TCP Server)
-│   ├── publishers/mqtt/                # MQTT 北向发布器
+│   ├── publishers/
+│   │   ├── mqtt/                       # MQTT 北向发布器
+│   │   └── gb28181/                    # GB/T 28181 国标发布器 (SIP)
 │   ├── api/                            # HTTP REST API 服务器
 │   └── config/                         # YAML 配置管理
 ├── android/dji-forwarder/              # DJI Android 转发端 (Kotlin)
 ├── configs/config.example.yaml         # 示例配置
-├── scripts/test_dji_client.go          # DJI 协议测试客户端
+├── scripts/
+│   ├── test_dji_client.go              # DJI 协议测试客户端
+│   └── test_gb28181_client.go          # GB28181 协议测试服务器
 ├── docs/                               # 文档
 └── Makefile
 ```
@@ -68,7 +72,8 @@ make clean
     ↓ 频率控制后的 DroneState
 北向发布层
 ├── MQTT Publisher
-└── HTTP API (REST)
+├── GB28181 Publisher (SIP → 国标平台)
+└── HTTP API (REST + WebSocket)
 ```
 
 ### HTTP API 接口
@@ -124,6 +129,49 @@ type Publisher interface {
 2. 转换为 DroneState JSON，通过 TCP 发送到 Go 网关
 3. DJI Adapter 接收解析 → Engine → Throttler → MQTT Publisher
 
+**GB/T 28181 路径** (v0.4 新增):
+1. 网关作为"虚拟设备"向上级 SIP 服务器注册
+2. DroneState 转换为 MobilePosition XML
+3. 通过 SIP NOTIFY 发送位置信息到国标平台
+4. 响应平台的 Catalog 查询、DeviceInfo 查询
+5. 支持位置订阅 (SUBSCRIBE/NOTIFY)
+
+### GB/T 28181 协议
+
+GB/T 28181 发布器实现国标视频监控协议的位置上报功能：
+
+**SIP 消息类型**:
+- `REGISTER`: 设备注册到平台
+- `MESSAGE`: 发送/接收 XML 消息（Keepalive、Catalog、DeviceInfo）
+- `NOTIFY`: 发送位置通知（MobilePosition）
+- `SUBSCRIBE`: 处理平台的位置订阅请求
+
+**MobilePosition XML 格式**:
+```xml
+<?xml version="1.0" encoding="GB2312"?>
+<Notify>
+  <CmdType>MobilePosition</CmdType>
+  <SN>1</SN>
+  <DeviceID>34020000001320000001</DeviceID>
+  <Time>2024-01-19T10:00:00</Time>
+  <Longitude>116.3975</Longitude>
+  <Latitude>39.9087</Latitude>
+  <Speed>5.0</Speed>
+  <Direction>45.0</Direction>
+  <Altitude>100.5</Altitude>
+</Notify>
+```
+
+**字段映射**:
+| GB28181 字段 | DroneState 来源 | 转换 |
+|-------------|----------------|------|
+| Longitude | Location.Lon | 直接使用（WGS84） |
+| Latitude | Location.Lat | 直接使用 |
+| Altitude | Location.AltGNSS | 直接使用（米） |
+| Speed | Velocity.Vx, Vy | sqrt(Vx² + Vy²) |
+| Direction | Attitude.Yaw | 0-360 度 |
+| Time | Timestamp | Unix ms → ISO8601 |
+
 ## 技术选型
 
 **Go 网关**:
@@ -132,6 +180,7 @@ type Publisher interface {
 |------|-----|------|
 | MAVLink | `github.com/bluenviron/gomavlib/v3` | v3.3.0 |
 | MQTT | `github.com/eclipse/paho.mqtt.golang` | v1.5.1 |
+| SIP/GB28181 | `github.com/emiago/sipgo` | v0.27.1 |
 | HTTP 路由 | `github.com/go-chi/chi/v5` | v5.2.4 |
 | CORS | `github.com/go-chi/cors` | v1.2.2 |
 | 配置 | `gopkg.in/yaml.v3` | v3.0.1 |
@@ -151,7 +200,7 @@ type Publisher interface {
 - [x] v0.1 (MVP)：MAVLink → MQTT，树莓派运行
 - [x] v0.2：DJI Mobile SDK Android 转发端 (核心完成，待 SDK 集成)
 - [x] v0.3：坐标系转换 (WGS84→GCJ02/BD09) + HTTP API
-- [ ] v0.4：GB/T 28181 国标支持
+- [x] v0.4：GB/T 28181 国标支持 (SIP 注册、位置上报、目录查询)
 - [ ] v1.0：Web 管理界面
 
 ## 项目指南
@@ -167,4 +216,4 @@ type Publisher interface {
 
 - README.md 包含完整的技术规格说明（中文）
 - 目标平台包括边缘设备（树莓派 4、Jetson）和云服务器
-- 当前已有 14 个单元测试，全部通过
+- 当前已有 57 个单元测试，全部通过

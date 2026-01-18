@@ -13,10 +13,11 @@ import (
 	"github.com/open-uav/telemetry-bridge/internal/api"
 	"github.com/open-uav/telemetry-bridge/internal/config"
 	"github.com/open-uav/telemetry-bridge/internal/core"
+	"github.com/open-uav/telemetry-bridge/internal/publishers/gb28181"
 	"github.com/open-uav/telemetry-bridge/internal/publishers/mqtt"
 )
 
-const version = "0.3.1-dev"
+const version = "0.4.0-dev"
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
@@ -75,6 +76,13 @@ func main() {
 		mqttPublisher := mqtt.New(cfg.MQTT)
 		engine.RegisterPublisher(mqttPublisher)
 		log.Printf("MQTT publisher registered (broker: %s)", cfg.MQTT.Broker)
+	}
+
+	if cfg.GB28181.Enabled {
+		gb28181Publisher := gb28181.New(cfg.GB28181)
+		engine.RegisterPublisher(gb28181Publisher)
+		log.Printf("GB28181 publisher registered (server: %s:%d, device: %s)",
+			cfg.GB28181.ServerIP, cfg.GB28181.ServerPort, cfg.GB28181.DeviceID)
 	}
 
 	// Start engine

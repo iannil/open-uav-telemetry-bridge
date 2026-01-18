@@ -13,6 +13,7 @@ type Config struct {
 	MAVLink    MAVLinkConfig    `yaml:"mavlink"`
 	DJI        DJIConfig        `yaml:"dji"`
 	MQTT       MQTTConfig       `yaml:"mqtt"`
+	GB28181    GB28181Config    `yaml:"gb28181"`
 	HTTP       HTTPConfig       `yaml:"http"`
 	Throttle   ThrottleConfig   `yaml:"throttle"`
 	Coordinate CoordinateConfig `yaml:"coordinate"`
@@ -57,6 +58,25 @@ type LWTConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Topic   string `yaml:"topic"`
 	Message string `yaml:"message"`
+}
+
+// GB28181Config contains GB/T 28181 national standard publisher settings
+type GB28181Config struct {
+	Enabled           bool   `yaml:"enabled"`
+	DeviceID          string `yaml:"device_id"`           // 20-digit device code
+	DeviceName        string `yaml:"device_name"`         // Device display name
+	LocalIP           string `yaml:"local_ip"`            // Local SIP address
+	LocalPort         int    `yaml:"local_port"`          // Local SIP port (default 5060)
+	ServerID          string `yaml:"server_id"`           // Platform SIP server ID
+	ServerIP          string `yaml:"server_ip"`           // Platform SIP server IP
+	ServerPort        int    `yaml:"server_port"`         // Platform SIP port (default 5060)
+	ServerDomain      string `yaml:"server_domain"`       // SIP domain (first 10 digits of server_id)
+	Username          string `yaml:"username"`            // SIP auth username
+	Password          string `yaml:"password"`            // SIP auth password
+	Transport         string `yaml:"transport"`           // udp | tcp (default udp)
+	RegisterExpires   int    `yaml:"register_expires"`    // REGISTER expiry in seconds (default 3600)
+	HeartbeatInterval int    `yaml:"heartbeat_interval"`  // Heartbeat interval in seconds (default 60)
+	PositionInterval  int    `yaml:"position_interval"`   // Position report interval in seconds (default 5)
 }
 
 // ThrottleConfig contains frequency control settings
@@ -126,6 +146,26 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Track.SampleIntervalMs == 0 {
 		cfg.Track.SampleIntervalMs = 1000
+	}
+
+	// GB28181 defaults
+	if cfg.GB28181.LocalPort == 0 {
+		cfg.GB28181.LocalPort = 5060
+	}
+	if cfg.GB28181.ServerPort == 0 {
+		cfg.GB28181.ServerPort = 5060
+	}
+	if cfg.GB28181.Transport == "" {
+		cfg.GB28181.Transport = "udp"
+	}
+	if cfg.GB28181.RegisterExpires == 0 {
+		cfg.GB28181.RegisterExpires = 3600
+	}
+	if cfg.GB28181.HeartbeatInterval == 0 {
+		cfg.GB28181.HeartbeatInterval = 60
+	}
+	if cfg.GB28181.PositionInterval == 0 {
+		cfg.GB28181.PositionInterval = 5
 	}
 
 	return &cfg, nil
