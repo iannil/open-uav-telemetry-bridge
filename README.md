@@ -308,7 +308,7 @@ Centralized protocol conversion for fleet management.
 - [x] **v0.2** - DJI Android Forwarder app
 - [x] **v0.3** - Coordinate conversion + HTTP API
 - [x] **v0.3.1** - WebSocket + Track storage
-- [ ] **v0.4** - GB/T 28181 national standard support
+- [x] **v0.4** - GB/T 28181 national standard support
 - [ ] **v1.0** - Web management dashboard
 
 ---
