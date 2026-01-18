@@ -28,6 +28,7 @@ OUTB 通过统一的插件化架构解决所有这些问题。
 ## 功能特性
 
 ### 核心功能
+
 - **多协议支持**：MAVLink（UDP/TCP/串口）、DJI（通过 Android 转发端）、GB/T 28181（计划中）
 - **统一数据模型**：无论源协议如何，都输出标准化 JSON
 - **坐标转换**：自动 WGS84 → GCJ02/BD09 转换，适配国内地图
@@ -35,12 +36,14 @@ OUTB 通过统一的插件化架构解决所有这些问题。
 - **状态缓存**：内存状态存储 + 历史轨迹存储
 
 ### 输出接口
+
 - **MQTT 发布器**：标准 MQTT 3.1.1，支持遗嘱消息（LWT）
 - **HTTP REST API**：查询无人机状态、健康检查、网关状态
 - **WebSocket**：实时状态推送
 - **轨迹存储**：环形缓冲区历史轨迹（可配置保留数量）
 
 ### 运维特性
+
 - **边缘就绪**：可运行在树莓派 4、Jetson Nano 或云服务器
 - **零依赖**：单一二进制文件，无需外部运行时
 - **热配置**：基于 YAML 的配置文件
@@ -58,8 +61,8 @@ OUTB 通过统一的插件化架构解决所有这些问题。
 
 ```bash
 # 克隆仓库
-git clone https://github.com/open-uav/telemetry-bridge.git
-cd telemetry-bridge
+git clone https://github.com/iannil/open-uav-telemetry-bridge.git
+cd open-uav-telemetry-bridge
 
 # 构建
 make build
@@ -143,7 +146,7 @@ curl http://localhost:8080/api/v1/drones
 ### HTTP 接口
 
 | 方法 | 端点 | 描述 |
-|------|------|------|
+| ------ | ------ | ------ |
 | GET | `/health` | 健康检查 |
 | GET | `/api/v1/status` | 网关状态和统计信息 |
 | GET | `/api/v1/drones` | 列出所有已连接的无人机 |
@@ -156,6 +159,7 @@ curl http://localhost:8080/api/v1/drones
 连接 `ws://localhost:8080/api/v1/ws` 获取实时更新。
 
 **消息类型：**
+
 ```json
 // 状态更新（服务端 → 客户端）
 {
@@ -338,7 +342,7 @@ track:
 ## 技术选型
 
 | 模块 | 技术 | 版本 |
-|------|------|------|
+| ------ | ------ | ------ |
 | MAVLink 解析 | gomavlib | v3.3.0 |
 | MQTT 客户端 | paho.mqtt.golang | v1.5.1 |
 | HTTP 路由 | chi | v5.2.4 |
@@ -370,10 +374,3 @@ track:
 - [gomavlib](https://github.com/bluenviron/gomavlib) - Go MAVLink 库
 - [paho.mqtt.golang](https://github.com/eclipse/paho.mqtt.golang) - Eclipse Paho MQTT 客户端
 - [chi](https://github.com/go-chi/chi) - 轻量级 HTTP 路由
-
----
-
-## 联系方式
-
-- Issues: [GitHub Issues](https://github.com/open-uav/telemetry-bridge/issues)
-- 讨论: [GitHub Discussions](https://github.com/open-uav/telemetry-bridge/discussions)

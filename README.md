@@ -28,6 +28,7 @@ OUTB solves all these problems with a unified, pluggable architecture.
 ## Features
 
 ### Core Features
+
 - **Multi-Protocol Support**: MAVLink (UDP/TCP/Serial), DJI (via Android Forwarder), GB/T 28181 (planned)
 - **Unified Data Model**: Standardized JSON output regardless of source protocol
 - **Coordinate Conversion**: Automatic WGS84 → GCJ02/BD09 transformation for China maps
@@ -35,12 +36,14 @@ OUTB solves all these problems with a unified, pluggable architecture.
 - **State Caching**: In-memory state store with historical track storage
 
 ### Output Interfaces
+
 - **MQTT Publisher**: Standard MQTT 3.1.1 with LWT (Last Will and Testament) support
 - **HTTP REST API**: Query drone states, health checks, gateway status
 - **WebSocket**: Real-time push notifications for state updates
 - **Track Storage**: Historical trajectory with ring buffer (configurable retention)
 
 ### Operational Features
+
 - **Edge-Ready**: Runs on Raspberry Pi 4, Jetson Nano, or cloud servers
 - **Zero Dependencies**: Single binary, no external runtime required
 - **Hot Configuration**: YAML-based configuration
@@ -58,8 +61,8 @@ OUTB solves all these problems with a unified, pluggable architecture.
 
 ```bash
 # Clone the repository
-git clone https://github.com/open-uav/telemetry-bridge.git
-cd telemetry-bridge
+git clone https://github.com/iannil/open-uav-telemetry-bridge.git
+cd open-uav-telemetry-bridge
 
 # Build
 make build
@@ -143,7 +146,7 @@ curl http://localhost:8080/api/v1/drones
 ### HTTP Endpoints
 
 | Method | Endpoint | Description |
-|--------|----------|-------------|
+| -------- | ---------- | ------------- |
 | GET | `/health` | Health check |
 | GET | `/api/v1/status` | Gateway status and statistics |
 | GET | `/api/v1/drones` | List all connected drones |
@@ -156,6 +159,7 @@ curl http://localhost:8080/api/v1/drones
 Connect to `ws://localhost:8080/api/v1/ws` for real-time updates.
 
 **Message Types:**
+
 ```json
 // State update (server → client)
 {
@@ -358,10 +362,3 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 - [gomavlib](https://github.com/bluenviron/gomavlib) - Go MAVLink library
 - [paho.mqtt.golang](https://github.com/eclipse/paho.mqtt.golang) - Eclipse Paho MQTT client
 - [chi](https://github.com/go-chi/chi) - Lightweight HTTP router
-
----
-
-## Contact
-
-- Issues: [GitHub Issues](https://github.com/open-uav/telemetry-bridge/issues)
-- Discussions: [GitHub Discussions](https://github.com/open-uav/telemetry-bridge/discussions)
