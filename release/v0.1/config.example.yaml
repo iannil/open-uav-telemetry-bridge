@@ -1,0 +1,35 @@
+# Open-UAV-Telemetry-Bridge Configuration
+# Copy this file to config.yaml and modify as needed
+
+server:
+  log_level: info  # debug, info, warn, error
+
+# MAVLink Adapter Configuration
+mavlink:
+  enabled: true
+  connection_type: udp   # udp | tcp | serial
+  address: "0.0.0.0:14550"
+  # For serial connection:
+  # connection_type: serial
+  # serial_port: "/dev/ttyUSB0"
+  # serial_baud: 57600
+
+# MQTT Publisher Configuration
+mqtt:
+  enabled: true
+  broker: "tcp://localhost:1883"
+  client_id: "outb-001"
+  topic_prefix: "uav/telemetry"
+  qos: 1
+  # username: ""
+  # password: ""
+  lwt:
+    enabled: true
+    topic: "uav/status"
+    message: "offline"
+
+# Frequency Throttling Configuration
+throttle:
+  default_rate_hz: 1.0   # Normal reporting rate
+  min_rate_hz: 0.5       # Minimum rate during idle
+  max_rate_hz: 10.0      # Maximum rate during alerts
