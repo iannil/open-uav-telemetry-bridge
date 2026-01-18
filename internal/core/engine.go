@@ -9,33 +9,52 @@ import (
 	"github.com/open-uav/telemetry-bridge/internal/core/coordinator"
 	"github.com/open-uav/telemetry-bridge/internal/core/statestore"
 	"github.com/open-uav/telemetry-bridge/internal/core/throttler"
+	"github.com/open-uav/telemetry-bridge/internal/core/trackstore"
 	"github.com/open-uav/telemetry-bridge/internal/models"
 )
 
+// StateCallback is a function that receives state updates
+type StateCallback func(state *models.DroneState)
+
 // Engine is the core message routing engine
 type Engine struct {
-	adapters    []Adapter
-	publishers  []Publisher
-	stateStore  *statestore.StateStore
-	throttler   *throttler.Throttler
-	coordinator *coordinator.Converter
-	events      chan *models.DroneState
-	wg          sync.WaitGroup
+	adapters      []Adapter
+	publishers    []Publisher
+	stateStore    *statestore.StateStore
+	trackStore    *trackstore.Store
+	throttler     *throttler.Throttler
+	coordinator   *coordinator.Converter
+	stateCallback StateCallback
+	events        chan *models.DroneState
+	wg            sync.WaitGroup
+	mu            sync.RWMutex
 }
 
 // EngineConfig holds configuration for the engine
 type EngineConfig struct {
-	RateHz       float64
-	ConvertGCJ02 bool
-	ConvertBD09  bool
+	RateHz            float64
+	ConvertGCJ02      bool
+	ConvertBD09       bool
+	TrackEnabled      bool
+	TrackMaxPoints    int
+	TrackSampleIntervalMs int64
 }
 
 // NewEngine creates a new core engine
 func NewEngine(cfg EngineConfig) *Engine {
+	var ts *trackstore.Store
+	if cfg.TrackEnabled {
+		ts = trackstore.New(trackstore.Config{
+			MaxPointsPerDrone: cfg.TrackMaxPoints,
+			SampleIntervalMs:  cfg.TrackSampleIntervalMs,
+		})
+	}
+
 	return &Engine{
 		adapters:    make([]Adapter, 0),
 		publishers:  make([]Publisher, 0),
 		stateStore:  statestore.New(),
+		trackStore:  ts,
 		throttler:   throttler.New(cfg.RateHz),
 		coordinator: coordinator.New(cfg.ConvertGCJ02, cfg.ConvertBD09),
 		events:      make(chan *models.DroneState, 100),
@@ -102,6 +121,11 @@ func (e *Engine) processState(state *models.DroneState) {
 	// Update state store
 	e.stateStore.Update(state)
 
+	// Record to track store
+	if e.trackStore != nil {
+		e.trackStore.Record(state)
+	}
+
 	// Check throttle
 	if !e.throttler.ShouldPublish(state) {
 		return
@@ -112,6 +136,14 @@ func (e *Engine) processState(state *models.DroneState) {
 		if err := pub.Publish(state); err != nil {
 			log.Printf("[Engine] Publish error (%s): %v", pub.Name(), err)
 		}
+	}
+
+	// Call state callback (for WebSocket broadcast)
+	e.mu.RLock()
+	cb := e.stateCallback
+	e.mu.RUnlock()
+	if cb != nil {
+		cb(state)
 	}
 }
 
@@ -170,4 +202,40 @@ func (e *Engine) GetDeviceCount() int {
 // SetThrottleRate updates the publish rate
 func (e *Engine) SetThrottleRate(rateHz float64) {
 	e.throttler.SetRate(rateHz)
+}
+
+// SetStateCallback sets a callback function that will be called for each state update
+// This is used for WebSocket broadcasting
+func (e *Engine) SetStateCallback(cb StateCallback) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.stateCallback = cb
+}
+
+// GetTrack returns the trajectory for a device
+func (e *Engine) GetTrack(deviceID string, limit int, since int64) []trackstore.TrackPoint {
+	if e.trackStore == nil {
+		return []trackstore.TrackPoint{}
+	}
+	return e.trackStore.GetTrack(deviceID, limit, since)
+}
+
+// ClearTrack removes all trajectory data for a device
+func (e *Engine) ClearTrack(deviceID string) {
+	if e.trackStore != nil {
+		e.trackStore.ClearTrack(deviceID)
+	}
+}
+
+// GetTrackSize returns the number of track points for a device
+func (e *Engine) GetTrackSize(deviceID string) int {
+	if e.trackStore == nil {
+		return 0
+	}
+	return e.trackStore.GetTrackSize(deviceID)
+}
+
+// IsTrackEnabled returns whether track storage is enabled
+func (e *Engine) IsTrackEnabled() bool {
+	return e.trackStore != nil
 }

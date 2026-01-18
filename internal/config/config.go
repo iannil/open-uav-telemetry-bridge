@@ -16,6 +16,7 @@ type Config struct {
 	HTTP       HTTPConfig       `yaml:"http"`
 	Throttle   ThrottleConfig   `yaml:"throttle"`
 	Coordinate CoordinateConfig `yaml:"coordinate"`
+	Track      TrackConfig      `yaml:"track"`
 }
 
 // ServerConfig contains server-level settings
@@ -79,6 +80,13 @@ type CoordinateConfig struct {
 	ConvertBD09  bool `yaml:"convert_bd09"`  // Convert to BD09 (Baidu Maps)
 }
 
+// TrackConfig contains trajectory storage settings
+type TrackConfig struct {
+	Enabled           bool  `yaml:"enabled"`
+	MaxPointsPerDrone int   `yaml:"max_points_per_drone"` // Maximum points per drone
+	SampleIntervalMs  int64 `yaml:"sample_interval_ms"`   // Minimum sampling interval
+}
+
 // Load reads configuration from a YAML file
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -112,6 +120,12 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.HTTP.Address == "" {
 		cfg.HTTP.Address = "0.0.0.0:8080"
+	}
+	if cfg.Track.MaxPointsPerDrone == 0 {
+		cfg.Track.MaxPointsPerDrone = 10000
+	}
+	if cfg.Track.SampleIntervalMs == 0 {
+		cfg.Track.SampleIntervalMs = 1000
 	}
 
 	return &cfg, nil

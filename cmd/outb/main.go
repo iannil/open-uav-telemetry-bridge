@@ -16,7 +16,7 @@ import (
 	"github.com/open-uav/telemetry-bridge/internal/publishers/mqtt"
 )
 
-const version = "0.3.0-dev"
+const version = "0.3.1-dev"
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
@@ -42,15 +42,18 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Create core engine with coordinate conversion
+	// Create core engine with coordinate conversion and track storage
 	engineCfg := core.EngineConfig{
-		RateHz:       cfg.Throttle.DefaultRateHz,
-		ConvertGCJ02: cfg.Coordinate.ConvertGCJ02,
-		ConvertBD09:  cfg.Coordinate.ConvertBD09,
+		RateHz:                cfg.Throttle.DefaultRateHz,
+		ConvertGCJ02:          cfg.Coordinate.ConvertGCJ02,
+		ConvertBD09:           cfg.Coordinate.ConvertBD09,
+		TrackEnabled:          cfg.Track.Enabled,
+		TrackMaxPoints:        cfg.Track.MaxPointsPerDrone,
+		TrackSampleIntervalMs: cfg.Track.SampleIntervalMs,
 	}
 	engine := core.NewEngine(engineCfg)
-	log.Printf("Core engine created (throttle: %.1f Hz, GCJ02: %v, BD09: %v)",
-		cfg.Throttle.DefaultRateHz, cfg.Coordinate.ConvertGCJ02, cfg.Coordinate.ConvertBD09)
+	log.Printf("Core engine created (throttle: %.1f Hz, GCJ02: %v, BD09: %v, track: %v)",
+		cfg.Throttle.DefaultRateHz, cfg.Coordinate.ConvertGCJ02, cfg.Coordinate.ConvertBD09, cfg.Track.Enabled)
 
 	// Register adapters
 	if cfg.MAVLink.Enabled {
@@ -86,7 +89,9 @@ func main() {
 		if err := httpServer.Start(ctx); err != nil {
 			log.Fatalf("Failed to start HTTP server: %v", err)
 		}
-		log.Printf("HTTP API server started (address: %s)", cfg.HTTP.Address)
+		// Connect WebSocket broadcast to engine state updates
+		engine.SetStateCallback(httpServer.BroadcastState)
+		log.Printf("HTTP API server started (address: %s, WebSocket: /api/v1/ws)", cfg.HTTP.Address)
 	}
 
 	log.Println("Gateway is running. Press Ctrl+C to stop.")

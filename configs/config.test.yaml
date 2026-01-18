@@ -28,3 +28,8 @@ throttle:
 coordinate:
   convert_gcj02: true
   convert_bd09: false
+
+track:
+  enabled: true
+  max_points_per_drone: 1000
+  sample_interval_ms: 100  # Lower interval for testing

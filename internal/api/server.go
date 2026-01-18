@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/open-uav/telemetry-bridge/internal/config"
+	"github.com/open-uav/telemetry-bridge/internal/core/trackstore"
 	"github.com/open-uav/telemetry-bridge/internal/models"
 )
 
@@ -20,6 +22,10 @@ type StateProvider interface {
 	GetState(deviceID string) *models.DroneState
 	GetAllStates() []*models.DroneState
 	GetDeviceCount() int
+	GetTrack(deviceID string, limit int, since int64) []trackstore.TrackPoint
+	ClearTrack(deviceID string)
+	GetTrackSize(deviceID string) int
+	IsTrackEnabled() bool
 }
 
 // Server is the HTTP API server
@@ -28,6 +34,7 @@ type Server struct {
 	provider StateProvider
 	server   *http.Server
 	router   *chi.Mux
+	hub      *Hub
 	version  string
 	started  time.Time
 }
@@ -37,6 +44,7 @@ func New(cfg config.HTTPConfig, provider StateProvider, version string) *Server 
 	s := &Server{
 		cfg:      cfg,
 		provider: provider,
+		hub:      NewHub(),
 		version:  version,
 	}
 	s.setupRouter()
@@ -75,6 +83,9 @@ func (s *Server) setupRouter() {
 		r.Get("/status", s.handleStatus)
 		r.Get("/drones", s.handleGetDrones)
 		r.Get("/drones/{deviceID}", s.handleGetDrone)
+		r.Get("/drones/{deviceID}/track", s.handleGetTrack)
+		r.Delete("/drones/{deviceID}/track", s.handleDeleteTrack)
+		r.Get("/ws", s.serveWs) // WebSocket endpoint
 	})
 
 	// Health check
@@ -93,6 +104,9 @@ func (s *Server) Start(ctx context.Context) error {
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
+
+	// Start WebSocket hub
+	go s.hub.Run()
 
 	go func() {
 		log.Printf("[HTTP] Server listening on %s", s.cfg.Address)
@@ -136,7 +150,8 @@ type AdapterStatus struct {
 
 // Stats represents gateway statistics
 type Stats struct {
-	ActiveDrones int `json:"active_drones"`
+	ActiveDrones     int `json:"active_drones"`
+	WebSocketClients int `json:"websocket_clients"`
 }
 
 // DronesResponse is the response for /api/v1/drones
@@ -165,7 +180,8 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		Adapters:      []AdapterStatus{}, // Would need to be passed from engine
 		Publishers:    []string{},        // Would need to be passed from engine
 		Stats: Stats{
-			ActiveDrones: s.provider.GetDeviceCount(),
+			ActiveDrones:     s.provider.GetDeviceCount(),
+			WebSocketClients: s.hub.ClientCount(),
 		},
 	}
 
@@ -197,9 +213,98 @@ func (s *Server) handleGetDrone(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, state)
 }
 
+// TrackResponse is the response for /api/v1/drones/{deviceID}/track
+type TrackResponse struct {
+	DeviceID   string                  `json:"device_id"`
+	Count      int                     `json:"count"`
+	Points     []trackstore.TrackPoint `json:"points"`
+	TotalSize  int                     `json:"total_size"`
+}
+
+func (s *Server) handleGetTrack(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "deviceID")
+
+	// Check if track storage is enabled
+	if !s.provider.IsTrackEnabled() {
+		s.writeJSON(w, http.StatusServiceUnavailable, ErrorResponse{
+			Error:    "track storage is disabled",
+			DeviceID: deviceID,
+		})
+		return
+	}
+
+	// Parse query parameters
+	limitStr := r.URL.Query().Get("limit")
+	sinceStr := r.URL.Query().Get("since")
+
+	var limit int
+	var since int64
+
+	if limitStr != "" {
+		var err error
+		limit, err = strconv.Atoi(limitStr)
+		if err != nil || limit < 0 {
+			s.writeJSON(w, http.StatusBadRequest, ErrorResponse{
+				Error: "invalid limit parameter",
+			})
+			return
+		}
+	}
+
+	if sinceStr != "" {
+		var err error
+		since, err = strconv.ParseInt(sinceStr, 10, 64)
+		if err != nil || since < 0 {
+			s.writeJSON(w, http.StatusBadRequest, ErrorResponse{
+				Error: "invalid since parameter",
+			})
+			return
+		}
+	}
+
+	points := s.provider.GetTrack(deviceID, limit, since)
+	totalSize := s.provider.GetTrackSize(deviceID)
+
+	s.writeJSON(w, http.StatusOK, TrackResponse{
+		DeviceID:  deviceID,
+		Count:     len(points),
+		Points:    points,
+		TotalSize: totalSize,
+	})
+}
+
+func (s *Server) handleDeleteTrack(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "deviceID")
+
+	// Check if track storage is enabled
+	if !s.provider.IsTrackEnabled() {
+		s.writeJSON(w, http.StatusServiceUnavailable, ErrorResponse{
+			Error:    "track storage is disabled",
+			DeviceID: deviceID,
+		})
+		return
+	}
+
+	s.provider.ClearTrack(deviceID)
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // writeJSON writes a JSON response
 func (s *Server) writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
+}
+
+// BroadcastState sends a drone state update to all WebSocket clients
+func (s *Server) BroadcastState(state *models.DroneState) {
+	if s.hub != nil {
+		s.hub.BroadcastState(state)
+	}
+}
+
+// GetHub returns the WebSocket hub
+func (s *Server) GetHub() *Hub {
+	return s.hub
 }

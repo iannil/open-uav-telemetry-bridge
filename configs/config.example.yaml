@@ -51,3 +51,9 @@ throttle:
 coordinate:
   convert_gcj02: true    # Convert to GCJ02 (Amap, Tencent, Google China)
   convert_bd09: false    # Convert to BD09 (Baidu Maps)
+
+# Track Storage Configuration (historical trajectory)
+track:
+  enabled: true
+  max_points_per_drone: 10000  # Maximum track points per drone
+  sample_interval_ms: 1000     # Minimum sampling interval in milliseconds
