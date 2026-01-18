@@ -9,11 +9,13 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Server   ServerConfig   `yaml:"server"`
-	MAVLink  MAVLinkConfig  `yaml:"mavlink"`
-	DJI      DJIConfig      `yaml:"dji"`
-	MQTT     MQTTConfig     `yaml:"mqtt"`
-	Throttle ThrottleConfig `yaml:"throttle"`
+	Server     ServerConfig     `yaml:"server"`
+	MAVLink    MAVLinkConfig    `yaml:"mavlink"`
+	DJI        DJIConfig        `yaml:"dji"`
+	MQTT       MQTTConfig       `yaml:"mqtt"`
+	HTTP       HTTPConfig       `yaml:"http"`
+	Throttle   ThrottleConfig   `yaml:"throttle"`
+	Coordinate CoordinateConfig `yaml:"coordinate"`
 }
 
 // ServerConfig contains server-level settings
@@ -63,6 +65,20 @@ type ThrottleConfig struct {
 	MaxRateHz     float64 `yaml:"max_rate_hz"`
 }
 
+// HTTPConfig contains HTTP API server settings
+type HTTPConfig struct {
+	Enabled     bool     `yaml:"enabled"`
+	Address     string   `yaml:"address"`      // Listen address: "host:port"
+	CORSEnabled bool     `yaml:"cors_enabled"` // Enable CORS support
+	CORSOrigins []string `yaml:"cors_origins"` // Allowed origins for CORS
+}
+
+// CoordinateConfig contains coordinate conversion settings
+type CoordinateConfig struct {
+	ConvertGCJ02 bool `yaml:"convert_gcj02"` // Convert to GCJ02 (Amap, Tencent)
+	ConvertBD09  bool `yaml:"convert_bd09"`  // Convert to BD09 (Baidu Maps)
+}
+
 // Load reads configuration from a YAML file
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -93,6 +109,9 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Throttle.MaxRateHz == 0 {
 		cfg.Throttle.MaxRateHz = 10.0
+	}
+	if cfg.HTTP.Address == "" {
+		cfg.HTTP.Address = "0.0.0.0:8080"
 	}
 
 	return &cfg, nil

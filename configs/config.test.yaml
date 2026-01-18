@@ -1,4 +1,4 @@
-# Test Configuration for DJI Adapter
+# Test Configuration for DJI Adapter + HTTP API
 
 server:
   log_level: debug
@@ -14,7 +14,17 @@ dji:
 mqtt:
   enabled: false
 
+http:
+  enabled: true
+  address: "127.0.0.1:8080"
+  cors_enabled: true
+  cors_origins: ["*"]
+
 throttle:
   default_rate_hz: 1.0
   min_rate_hz: 0.5
   max_rate_hz: 10.0
+
+coordinate:
+  convert_gcj02: true
+  convert_bd09: false

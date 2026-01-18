@@ -14,11 +14,17 @@ type DroneState struct {
 
 // Location contains position information
 type Location struct {
-	Lat              float64 `json:"lat"`               // Latitude in degrees
-	Lon              float64 `json:"lon"`               // Longitude in degrees
+	Lat              float64 `json:"lat"`               // Latitude in degrees (WGS84)
+	Lon              float64 `json:"lon"`               // Longitude in degrees (WGS84)
 	AltBaro          float64 `json:"alt_baro"`          // Barometric altitude in meters
 	AltGNSS          float64 `json:"alt_gnss"`          // GNSS altitude in meters
-	CoordinateSystem string  `json:"coordinate_system"` // WGS84, GCJ02, BD09
+	CoordinateSystem string  `json:"coordinate_system"` // Primary coordinate system: WGS84
+
+	// Converted coordinates for China map services (optional)
+	LatGCJ02 *float64 `json:"lat_gcj02,omitempty"` // GCJ02 latitude (Amap, Tencent)
+	LonGCJ02 *float64 `json:"lon_gcj02,omitempty"` // GCJ02 longitude
+	LatBD09  *float64 `json:"lat_bd09,omitempty"`  // BD09 latitude (Baidu Maps)
+	LonBD09  *float64 `json:"lon_bd09,omitempty"`  // BD09 longitude
 }
 
 // Attitude contains orientation information

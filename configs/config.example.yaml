@@ -34,8 +34,20 @@ mqtt:
     topic: "uav/status"
     message: "offline"
 
+# HTTP API Configuration
+http:
+  enabled: true
+  address: "0.0.0.0:8080"
+  cors_enabled: true
+  cors_origins: ["*"]
+
 # Frequency Throttling Configuration
 throttle:
   default_rate_hz: 1.0   # Normal reporting rate
   min_rate_hz: 0.5       # Minimum rate during idle
   max_rate_hz: 10.0      # Maximum rate during alerts
+
+# Coordinate Conversion Configuration (for China maps)
+coordinate:
+  convert_gcj02: true    # Convert to GCJ02 (Amap, Tencent, Google China)
+  convert_bd09: false    # Convert to BD09 (Baidu Maps)

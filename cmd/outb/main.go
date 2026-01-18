@@ -10,12 +10,13 @@ import (
 
 	"github.com/open-uav/telemetry-bridge/internal/adapters/dji"
 	"github.com/open-uav/telemetry-bridge/internal/adapters/mavlink"
+	"github.com/open-uav/telemetry-bridge/internal/api"
 	"github.com/open-uav/telemetry-bridge/internal/config"
 	"github.com/open-uav/telemetry-bridge/internal/core"
 	"github.com/open-uav/telemetry-bridge/internal/publishers/mqtt"
 )
 
-const version = "0.2.0-dev"
+const version = "0.3.0-dev"
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
@@ -41,9 +42,15 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Create core engine
-	engine := core.NewEngine(cfg.Throttle.DefaultRateHz)
-	log.Printf("Core engine created (throttle rate: %.1f Hz)", cfg.Throttle.DefaultRateHz)
+	// Create core engine with coordinate conversion
+	engineCfg := core.EngineConfig{
+		RateHz:       cfg.Throttle.DefaultRateHz,
+		ConvertGCJ02: cfg.Coordinate.ConvertGCJ02,
+		ConvertBD09:  cfg.Coordinate.ConvertBD09,
+	}
+	engine := core.NewEngine(engineCfg)
+	log.Printf("Core engine created (throttle: %.1f Hz, GCJ02: %v, BD09: %v)",
+		cfg.Throttle.DefaultRateHz, cfg.Coordinate.ConvertGCJ02, cfg.Coordinate.ConvertBD09)
 
 	// Register adapters
 	if cfg.MAVLink.Enabled {
@@ -72,6 +79,16 @@ func main() {
 		log.Fatalf("Failed to start engine: %v", err)
 	}
 
+	// Start HTTP API server
+	var httpServer *api.Server
+	if cfg.HTTP.Enabled {
+		httpServer = api.New(cfg.HTTP, engine, version)
+		if err := httpServer.Start(ctx); err != nil {
+			log.Fatalf("Failed to start HTTP server: %v", err)
+		}
+		log.Printf("HTTP API server started (address: %s)", cfg.HTTP.Address)
+	}
+
 	log.Println("Gateway is running. Press Ctrl+C to stop.")
 	fmt.Println()
 
@@ -85,6 +102,13 @@ func main() {
 
 	// Cancel context to stop all goroutines
 	cancel()
+
+	// Stop HTTP server first
+	if httpServer != nil {
+		if err := httpServer.Stop(); err != nil {
+			log.Printf("Error stopping HTTP server: %v", err)
+		}
+	}
 
 	// Stop engine gracefully
 	if err := engine.Stop(); err != nil {

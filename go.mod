@@ -10,6 +10,8 @@ require (
 
 require (
 	github.com/creack/goselect v0.1.2 // indirect
+	github.com/go-chi/chi/v5 v5.2.4 // indirect
+	github.com/go-chi/cors v1.2.2 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/transport/v2 v2.2.10 // indirect

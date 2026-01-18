@@ -6,6 +6,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/open-uav/telemetry-bridge/internal/core/coordinator"
 	"github.com/open-uav/telemetry-bridge/internal/core/statestore"
 	"github.com/open-uav/telemetry-bridge/internal/core/throttler"
 	"github.com/open-uav/telemetry-bridge/internal/models"
@@ -13,22 +14,31 @@ import (
 
 // Engine is the core message routing engine
 type Engine struct {
-	adapters   []Adapter
-	publishers []Publisher
-	stateStore *statestore.StateStore
-	throttler  *throttler.Throttler
-	events     chan *models.DroneState
-	wg         sync.WaitGroup
+	adapters    []Adapter
+	publishers  []Publisher
+	stateStore  *statestore.StateStore
+	throttler   *throttler.Throttler
+	coordinator *coordinator.Converter
+	events      chan *models.DroneState
+	wg          sync.WaitGroup
+}
+
+// EngineConfig holds configuration for the engine
+type EngineConfig struct {
+	RateHz       float64
+	ConvertGCJ02 bool
+	ConvertBD09  bool
 }
 
 // NewEngine creates a new core engine
-func NewEngine(rateHz float64) *Engine {
+func NewEngine(cfg EngineConfig) *Engine {
 	return &Engine{
-		adapters:   make([]Adapter, 0),
-		publishers: make([]Publisher, 0),
-		stateStore: statestore.New(),
-		throttler:  throttler.New(rateHz),
-		events:     make(chan *models.DroneState, 100),
+		adapters:    make([]Adapter, 0),
+		publishers:  make([]Publisher, 0),
+		stateStore:  statestore.New(),
+		throttler:   throttler.New(cfg.RateHz),
+		coordinator: coordinator.New(cfg.ConvertGCJ02, cfg.ConvertBD09),
+		events:      make(chan *models.DroneState, 100),
 	}
 }
 
@@ -86,6 +96,9 @@ func (e *Engine) routeMessages(ctx context.Context) {
 
 // processState handles a single state update
 func (e *Engine) processState(state *models.DroneState) {
+	// Apply coordinate conversion
+	e.applyCoordinateConversion(state)
+
 	// Update state store
 	e.stateStore.Update(state)
 
@@ -100,6 +113,20 @@ func (e *Engine) processState(state *models.DroneState) {
 			log.Printf("[Engine] Publish error (%s): %v", pub.Name(), err)
 		}
 	}
+}
+
+// applyCoordinateConversion converts WGS84 coordinates to GCJ02/BD09 if configured
+func (e *Engine) applyCoordinateConversion(state *models.DroneState) {
+	if e.coordinator == nil {
+		return
+	}
+
+	result := e.coordinator.Convert(state.Location.Lat, state.Location.Lon)
+
+	state.Location.LatGCJ02 = result.LatGCJ02
+	state.Location.LonGCJ02 = result.LonGCJ02
+	state.Location.LatBD09 = result.LatBD09
+	state.Location.LonBD09 = result.LonBD09
 }
 
 // Stop gracefully stops the engine
