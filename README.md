@@ -29,7 +29,7 @@ OUTB solves all these problems with a unified, pluggable architecture.
 
 ### Core Features
 
-- **Multi-Protocol Support**: MAVLink (UDP/TCP/Serial), DJI (via Android Forwarder), GB/T 28181 (planned)
+- **Multi-Protocol Support**: MAVLink (UDP/TCP/Serial), DJI (via Android Forwarder), GB/T 28181
 - **Unified Data Model**: Standardized JSON output regardless of source protocol
 - **Coordinate Conversion**: Automatic WGS84 → GCJ02/BD09 transformation for China maps
 - **Frequency Throttling**: Configurable downsampling (e.g., 50Hz → 1Hz) to save bandwidth
@@ -129,7 +129,7 @@ curl http://localhost:8080/api/v1/drones
 │                    Southbound Adapters                       │
 │  ┌──────────────┐  ┌────────────────┐  ┌─────────────────┐  │
 │  │   MAVLink    │  │  DJI Forwarder │  │   GB/T 28181    │  │
-│  │ (UDP/TCP/Ser)│  │  (TCP Server)  │  │    (Planned)    │  │
+│  │ (UDP/TCP/Ser)│  │  (TCP Server)  │  │  (SIP/NOTIFY)   │  │
 │  └──────┬───────┘  └───────┬────────┘  └────────┬────────┘  │
 └─────────┼──────────────────┼────────────────────┼───────────┘
           │                  │                    │
