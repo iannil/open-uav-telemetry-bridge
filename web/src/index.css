@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+/* Custom styles */
+html, body, #root {
+  height: 100%;
+}
+
+/* Leaflet map fixes */
+.leaflet-container {
+  background: #1f2937;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #374151;
+  color: #fff;
+  border-radius: 8px;
+}
+
+.leaflet-popup-tip {
+  background: #374151;
+}
+
+.leaflet-popup-content {
+  margin: 12px;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Drone marker animation */
+.drone-marker {
+  transition: transform 0.3s ease-out;
+}
+
+/* Focus styles */
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}

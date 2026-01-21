@@ -200,8 +200,9 @@ GB/T 28181 发布器实现国标视频监控协议的位置上报功能：
 - [x] v0.1 (MVP)：MAVLink → MQTT，树莓派运行
 - [x] v0.2：DJI Mobile SDK Android 转发端 (核心完成，待 SDK 集成)
 - [x] v0.3：坐标系转换 (WGS84→GCJ02/BD09) + HTTP API
+- [x] v0.3.1：WebSocket 实时推送 + 轨迹存储
 - [x] v0.4：GB/T 28181 国标支持 (SIP 注册、位置上报、目录查询)
-- [ ] v1.0：Web 管理界面
+- [x] v1.0：Web 管理界面 (React + TypeScript)
 
 ## 项目指南
 

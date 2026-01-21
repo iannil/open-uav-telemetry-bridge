@@ -12,9 +12,15 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/open-uav/telemetry-bridge/internal/api/auth"
+	"github.com/open-uav/telemetry-bridge/internal/api/handlers"
 	"github.com/open-uav/telemetry-bridge/internal/config"
+	"github.com/open-uav/telemetry-bridge/internal/core/alerter"
+	"github.com/open-uav/telemetry-bridge/internal/core/geofence"
+	"github.com/open-uav/telemetry-bridge/internal/core/logger"
 	"github.com/open-uav/telemetry-bridge/internal/core/trackstore"
 	"github.com/open-uav/telemetry-bridge/internal/models"
+	"github.com/open-uav/telemetry-bridge/internal/web"
 )
 
 // StateProvider is an interface for getting drone states
@@ -30,23 +36,77 @@ type StateProvider interface {
 
 // Server is the HTTP API server
 type Server struct {
-	cfg      config.HTTPConfig
-	provider StateProvider
-	server   *http.Server
-	router   *chi.Mux
-	hub      *Hub
-	version  string
-	started  time.Time
+	cfg               config.HTTPConfig
+	fullConfig        *config.Config
+	configPath        string
+	provider          StateProvider
+	server            *http.Server
+	router            *chi.Mux
+	hub               *Hub
+	version           string
+	started           time.Time
+	webUIEnabled      bool
+	authEnabled       bool
+	authManager       *auth.Manager
+	configHandler     *handlers.ConfigHandler
+	logBuffer         *logger.Buffer
+	logsHandler       *handlers.LogsHandler
+	alerter           *alerter.Alerter
+	alertsHandler     *handlers.AlertsHandler
+	geofenceEngine    *geofence.Engine
+	geofencesHandler  *handlers.GeofencesHandler
 }
 
 // New creates a new HTTP API server
 func New(cfg config.HTTPConfig, provider StateProvider, version string) *Server {
+	return NewWithConfig(cfg, nil, "", provider, version)
+}
+
+// NewWithConfig creates a new HTTP API server with full configuration access
+func NewWithConfig(cfg config.HTTPConfig, fullConfig *config.Config, configPath string, provider StateProvider, version string) *Server {
 	s := &Server{
-		cfg:      cfg,
-		provider: provider,
-		hub:      NewHub(),
-		version:  version,
+		cfg:          cfg,
+		fullConfig:   fullConfig,
+		configPath:   configPath,
+		provider:     provider,
+		hub:          NewHub(),
+		version:      version,
+		webUIEnabled: cfg.WebUIEnabled,
+		authEnabled:  cfg.Auth.Enabled,
 	}
+
+	// Initialize auth manager if authentication is enabled
+	if cfg.Auth.Enabled {
+		s.authManager = auth.NewManager(
+			cfg.Auth.Username,
+			cfg.Auth.PasswordHash,
+			cfg.Auth.JWTSecret,
+			cfg.Auth.TokenExpiryHours,
+		)
+		log.Printf("[HTTP] Authentication enabled for user: %s", cfg.Auth.Username)
+	}
+
+	// Initialize config handler if full config is provided
+	if fullConfig != nil {
+		s.configHandler = handlers.NewConfigHandler(fullConfig, configPath, nil)
+		log.Printf("[HTTP] Configuration management enabled")
+	}
+
+	// Initialize log buffer and handler (always enabled)
+	s.logBuffer = logger.New(1000) // Store last 1000 log entries
+	s.logsHandler = handlers.NewLogsHandler(s.logBuffer)
+	log.Printf("[HTTP] Log buffer enabled (capacity: 1000)")
+
+	// Initialize alerter (always enabled)
+	s.alerter = alerter.New(alerter.Config{MaxAlerts: 1000})
+	s.alertsHandler = handlers.NewAlertsHandler(s.alerter)
+	log.Printf("[HTTP] Alert system enabled")
+
+	// Initialize geofence engine (always enabled)
+	s.geofenceEngine = geofence.NewEngine(geofence.Config{MaxBreaches: 500})
+	s.geofencesHandler = handlers.NewGeofencesHandler(s.geofenceEngine)
+	log.Printf("[HTTP] Geofence system enabled")
+
 	s.setupRouter()
 	return s
 }
@@ -80,16 +140,107 @@ func (s *Server) setupRouter() {
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Get("/status", s.handleStatus)
-		r.Get("/drones", s.handleGetDrones)
-		r.Get("/drones/{deviceID}", s.handleGetDrone)
-		r.Get("/drones/{deviceID}/track", s.handleGetTrack)
-		r.Delete("/drones/{deviceID}/track", s.handleDeleteTrack)
-		r.Get("/ws", s.serveWs) // WebSocket endpoint
+		// Public auth routes (always available, even when auth is disabled)
+		r.Route("/auth", func(r chi.Router) {
+			r.Post("/login", s.handleLogin)
+			r.Post("/logout", s.handleLogout)
+			r.Get("/me", s.handleGetMe)
+		})
+
+		// Protected routes (conditionally apply auth middleware)
+		r.Group(func(r chi.Router) {
+			if s.authEnabled {
+				r.Use(auth.Middleware(s.authManager))
+			}
+			r.Get("/status", s.handleStatus)
+			r.Get("/drones", s.handleGetDrones)
+			r.Get("/drones/{deviceID}", s.handleGetDrone)
+			r.Get("/drones/{deviceID}/track", s.handleGetTrack)
+			r.Delete("/drones/{deviceID}/track", s.handleDeleteTrack)
+
+			// Configuration management routes (only if config handler is available)
+			if s.configHandler != nil {
+				r.Route("/config", func(r chi.Router) {
+					r.Get("/", s.configHandler.GetConfig)
+					r.Put("/adapters/mavlink", s.configHandler.UpdateMAVLinkConfig)
+					r.Put("/adapters/dji", s.configHandler.UpdateDJIConfig)
+					r.Put("/publishers/mqtt", s.configHandler.UpdateMQTTConfig)
+					r.Put("/publishers/gb28181", s.configHandler.UpdateGB28181Config)
+					r.Put("/throttle", s.configHandler.UpdateThrottleConfig)
+					r.Put("/coordinate", s.configHandler.UpdateCoordinateConfig)
+					r.Put("/track", s.configHandler.UpdateTrackConfig)
+					r.Post("/apply", s.configHandler.ApplyConfig)
+					r.Post("/export", s.configHandler.ExportConfig)
+				})
+			}
+
+			// Logs routes (always enabled)
+			if s.logsHandler != nil {
+				r.Route("/logs", func(r chi.Router) {
+					r.Get("/", s.logsHandler.GetLogs)
+					r.Get("/stream", s.logsHandler.StreamLogs)
+					r.Delete("/", s.logsHandler.ClearLogs)
+				})
+			}
+
+			// Alerts routes (always enabled)
+			if s.alertsHandler != nil {
+				r.Route("/alerts", func(r chi.Router) {
+					r.Get("/", s.alertsHandler.GetAlerts)
+					r.Delete("/", s.alertsHandler.ClearAlerts)
+					r.Get("/stats", s.alertsHandler.GetStats)
+					r.Get("/{id}", s.alertsHandler.GetAlert)
+					r.Post("/{id}/ack", s.alertsHandler.AcknowledgeAlert)
+
+					// Rules sub-routes
+					r.Route("/rules", func(r chi.Router) {
+						r.Get("/", s.alertsHandler.GetRules)
+						r.Post("/", s.alertsHandler.CreateRule)
+						r.Get("/{id}", s.alertsHandler.GetRule)
+						r.Put("/{id}", s.alertsHandler.UpdateRule)
+						r.Delete("/{id}", s.alertsHandler.DeleteRule)
+					})
+				})
+			}
+
+			// Geofences routes (always enabled)
+			if s.geofencesHandler != nil {
+				r.Route("/geofences", func(r chi.Router) {
+					r.Get("/", s.geofencesHandler.GetGeofences)
+					r.Post("/", s.geofencesHandler.CreateGeofence)
+					r.Get("/stats", s.geofencesHandler.GetStats)
+					r.Get("/breaches", s.geofencesHandler.GetBreaches)
+					r.Delete("/breaches", s.geofencesHandler.ClearBreaches)
+					r.Get("/{id}", s.geofencesHandler.GetGeofence)
+					r.Put("/{id}", s.geofencesHandler.UpdateGeofence)
+					r.Delete("/{id}", s.geofencesHandler.DeleteGeofence)
+				})
+			}
+		})
+
+		// WebSocket endpoint (with optional auth)
+		r.Group(func(r chi.Router) {
+			if s.authEnabled {
+				r.Use(auth.OptionalMiddleware(s.authManager))
+			}
+			r.Get("/ws", s.serveWs)
+		})
 	})
 
 	// Health check
 	r.Get("/health", s.handleHealth)
+
+	// Web UI static file serving
+	if s.webUIEnabled {
+		fsys, err := web.GetFS()
+		if err != nil {
+			log.Printf("[HTTP] Failed to load Web UI: %v", err)
+		} else {
+			spaHandler := web.NewSPAHandler(fsys)
+			r.NotFound(spaHandler.ServeHTTP)
+			log.Printf("[HTTP] Web UI enabled")
+		}
+	}
 
 	s.router = r
 }
@@ -290,6 +441,117 @@ func (s *Server) handleDeleteTrack(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Authentication handlers
+
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	// If auth is not enabled, return auth status
+	if !s.authEnabled {
+		s.writeJSON(w, http.StatusOK, map[string]interface{}{
+			"auth_enabled": false,
+			"message":      "authentication is disabled",
+		})
+		return
+	}
+
+	var req auth.LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: "invalid request body",
+		})
+		return
+	}
+
+	// Validate credentials
+	if err := s.authManager.ValidateCredentials(req.Username, req.Password); err != nil {
+		s.writeJSON(w, http.StatusUnauthorized, ErrorResponse{
+			Error: "invalid username or password",
+		})
+		return
+	}
+
+	// Generate JWT token
+	token, expiresAt, err := s.authManager.GenerateToken(req.Username)
+	if err != nil {
+		log.Printf("[HTTP] Failed to generate token: %v", err)
+		s.writeJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error: "failed to generate token",
+		})
+		return
+	}
+
+	user := s.authManager.GetUser()
+	s.writeJSON(w, http.StatusOK, auth.LoginResponse{
+		Token:     token,
+		ExpiresAt: expiresAt,
+		User:      user,
+	})
+}
+
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	// JWT is stateless, so logout is handled client-side by removing the token
+	// This endpoint exists for API completeness
+	s.writeJSON(w, http.StatusOK, map[string]string{
+		"message": "logged out successfully",
+	})
+}
+
+func (s *Server) handleGetMe(w http.ResponseWriter, r *http.Request) {
+	// If auth is not enabled, return anonymous user
+	if !s.authEnabled {
+		s.writeJSON(w, http.StatusOK, map[string]interface{}{
+			"auth_enabled": false,
+			"user": auth.User{
+				Username: "anonymous",
+				Role:     "admin",
+			},
+		})
+		return
+	}
+
+	// Get token from Authorization header
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		s.writeJSON(w, http.StatusUnauthorized, ErrorResponse{
+			Error: "missing authorization header",
+		})
+		return
+	}
+
+	// Parse Bearer token
+	parts := make([]string, 0)
+	if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+		parts = append(parts, "Bearer", authHeader[7:])
+	}
+	if len(parts) != 2 {
+		s.writeJSON(w, http.StatusUnauthorized, ErrorResponse{
+			Error: "invalid authorization header format",
+		})
+		return
+	}
+
+	tokenInfo, err := s.authManager.ValidateToken(parts[1])
+	if err != nil {
+		if err == auth.ErrTokenExpired {
+			s.writeJSON(w, http.StatusUnauthorized, ErrorResponse{
+				Error: "token has expired",
+			})
+		} else {
+			s.writeJSON(w, http.StatusUnauthorized, ErrorResponse{
+				Error: "invalid token",
+			})
+		}
+		return
+	}
+
+	s.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"auth_enabled": true,
+		"user": auth.User{
+			Username: tokenInfo.Username,
+			Role:     tokenInfo.Role,
+		},
+	})
+}
+
 // writeJSON writes a JSON response
 func (s *Server) writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
@@ -307,4 +569,33 @@ func (s *Server) BroadcastState(state *models.DroneState) {
 // GetHub returns the WebSocket hub
 func (s *Server) GetHub() *Hub {
 	return s.hub
+}
+
+// GetLogBuffer returns the log buffer for integration with the global logger
+func (s *Server) GetLogBuffer() *logger.Buffer {
+	return s.logBuffer
+}
+
+// GetAlerter returns the alerter for integration with the engine
+func (s *Server) GetAlerter() *alerter.Alerter {
+	return s.alerter
+}
+
+// EvaluateAlerts checks a drone state against alert rules
+func (s *Server) EvaluateAlerts(state *models.DroneState) {
+	if s.alerter != nil {
+		s.alerter.Evaluate(state)
+	}
+}
+
+// GetGeofenceEngine returns the geofence engine for integration
+func (s *Server) GetGeofenceEngine() *geofence.Engine {
+	return s.geofenceEngine
+}
+
+// EvaluateGeofences checks a drone state against geofences
+func (s *Server) EvaluateGeofences(state *models.DroneState) {
+	if s.geofenceEngine != nil {
+		s.geofenceEngine.Evaluate(state)
+	}
 }

@@ -58,6 +58,16 @@ http:
   address: "0.0.0.0:8080"
   cors_enabled: true
   cors_origins: ["*"]
+  webui_enabled: true  # Enable embedded Web UI
+  # Authentication Configuration
+  auth:
+    enabled: false       # Enable JWT authentication
+    username: "admin"    # Admin username
+    # Password hash (bcrypt) - generate with: htpasswd -nbBC 10 "" password | tr -d ':'
+    # Default: "admin123" -> "$2a$10$..."
+    password_hash: ""
+    jwt_secret: ""       # Secret key for JWT signing (required when auth enabled)
+    token_expiry_hours: 24
 
 # Frequency Throttling Configuration
 throttle:

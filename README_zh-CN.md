@@ -309,7 +309,7 @@ track:
 - [x] **v0.3** - 坐标转换 + HTTP API
 - [x] **v0.3.1** - WebSocket + 轨迹存储
 - [x] **v0.4** - GB/T 28181 国标支持
-- [ ] **v1.0** - Web 管理界面
+- [x] **v1.0** - Web 管理界面 (React + TypeScript)
 
 ---
 

@@ -88,10 +88,21 @@ type ThrottleConfig struct {
 
 // HTTPConfig contains HTTP API server settings
 type HTTPConfig struct {
-	Enabled     bool     `yaml:"enabled"`
-	Address     string   `yaml:"address"`      // Listen address: "host:port"
-	CORSEnabled bool     `yaml:"cors_enabled"` // Enable CORS support
-	CORSOrigins []string `yaml:"cors_origins"` // Allowed origins for CORS
+	Enabled      bool       `yaml:"enabled"`
+	Address      string     `yaml:"address"`       // Listen address: "host:port"
+	CORSEnabled  bool       `yaml:"cors_enabled"`  // Enable CORS support
+	CORSOrigins  []string   `yaml:"cors_origins"`  // Allowed origins for CORS
+	WebUIEnabled bool       `yaml:"webui_enabled"` // Enable embedded Web UI
+	Auth         AuthConfig `yaml:"auth"`          // Authentication settings
+}
+
+// AuthConfig contains authentication settings
+type AuthConfig struct {
+	Enabled         bool   `yaml:"enabled"`           // Enable authentication
+	Username        string `yaml:"username"`          // Admin username
+	PasswordHash    string `yaml:"password_hash"`     // Bcrypt hash of password
+	JWTSecret       string `yaml:"jwt_secret"`        // Secret for JWT signing
+	TokenExpiryHours int   `yaml:"token_expiry_hours"` // Token expiry in hours
 }
 
 // CoordinateConfig contains coordinate conversion settings
@@ -146,6 +157,11 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Track.SampleIntervalMs == 0 {
 		cfg.Track.SampleIntervalMs = 1000
+	}
+
+	// Auth defaults
+	if cfg.HTTP.Auth.TokenExpiryHours == 0 {
+		cfg.HTTP.Auth.TokenExpiryHours = 24
 	}
 
 	// GB28181 defaults

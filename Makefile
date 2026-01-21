@@ -1,9 +1,11 @@
-.PHONY: all build clean test lint run deps help
+.PHONY: all build clean test lint run deps help web-deps web-build web-clean build-with-web
 
 # Build variables
 BINARY_NAME=outb
 BUILD_DIR=bin
 CMD_PATH=./cmd/outb
+WEB_DIR=web
+EMBED_DIR=internal/web/dist
 
 # Go variables
 GOFLAGS=-ldflags="-s -w"
@@ -74,3 +76,25 @@ setup-config: ## Copy example config
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+## Web UI Commands
+
+web-deps: ## Install web dependencies
+	cd $(WEB_DIR) && npm install
+
+web-build: ## Build web UI and copy to embed directory
+	@echo "Building Web UI..."
+	cd $(WEB_DIR) && npm run build
+	@rm -rf $(EMBED_DIR)
+	@mkdir -p $(EMBED_DIR)
+	cp -r $(WEB_DIR)/dist/* $(EMBED_DIR)/
+	@echo "Web UI built and copied to $(EMBED_DIR)"
+
+web-dev: ## Run web UI development server
+	cd $(WEB_DIR) && npm run dev
+
+web-clean: ## Clean web build artifacts
+	@echo "Cleaning web artifacts..."
+	@rm -rf $(WEB_DIR)/node_modules $(WEB_DIR)/dist $(EMBED_DIR)
+
+build-with-web: web-build build ## Build with web UI embedded

@@ -309,7 +309,7 @@ Centralized protocol conversion for fleet management.
 - [x] **v0.3** - Coordinate conversion + HTTP API
 - [x] **v0.3.1** - WebSocket + Track storage
 - [x] **v0.4** - GB/T 28181 national standard support
-- [ ] **v1.0** - Web management dashboard
+- [x] **v1.0** - Web management dashboard (React + TypeScript)
 
 ---
 
