@@ -6,8 +6,11 @@
 // Options:
 //   -listen string   Listen address (default ":5060")
 //   -user   string   Expected device ID (default "34020000001320000001")
-//   -pass   string   Device password (default "password123")
+//   -pass   string   Device password (required, or set GB28181_PASSWORD env var)
 //   -realm  string   SIP realm (default "3402000000")
+//
+// Environment variables:
+//   GB28181_PASSWORD  Device password (alternative to -pass flag)
 //
 // The test client will:
 // 1. Accept REGISTER requests and authenticate
@@ -35,12 +38,23 @@ import (
 var (
 	listenAddr = flag.String("listen", ":5060", "Listen address")
 	username   = flag.String("user", "34020000001320000001", "Expected device ID")
-	password   = flag.String("pass", "password123", "Device password")
+	password   = flag.String("pass", "", "Device password (required, or set GB28181_PASSWORD env var)")
 	realm      = flag.String("realm", "3402000000", "SIP realm")
 )
 
 func main() {
 	flag.Parse()
+
+	// Get password from flag or environment variable
+	pass := *password
+	if pass == "" {
+		pass = os.Getenv("GB28181_PASSWORD")
+	}
+	if pass == "" {
+		log.Fatal("Password is required. Set via -pass flag or GB28181_PASSWORD environment variable")
+	}
+	// Update the password pointer for use in handlers
+	*password = pass
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 	log.Printf("GB28181 Test Server starting on %s", *listenAddr)

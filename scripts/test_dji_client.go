@@ -1,15 +1,27 @@
 // +build ignore
 
 // Test client that simulates an Android DJI Forwarder
-// Usage: go run scripts/test_dji_client.go
+// Usage: go run scripts/test_dji_client.go [options]
+//
+// Options:
+//   -addr string     Gateway address (default "127.0.0.1:14560")
+//   -device string   Device ID (default "dji-test-001")
+//   -count int       Number of telemetry messages to send (default 5)
 package main
 
 import (
 	"encoding/binary"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net"
 	"time"
+)
+
+var (
+	serverAddr = flag.String("addr", "127.0.0.1:14560", "Gateway address")
+	deviceID   = flag.String("device", "dji-test-001", "Device ID")
+	msgCount   = flag.Int("count", 5, "Number of telemetry messages to send")
 )
 
 type Message struct {
@@ -101,11 +113,13 @@ func readMessage(conn net.Conn) (*Message, error) {
 }
 
 func main() {
+	flag.Parse()
+
 	fmt.Println("DJI Forwarder Test Client")
 	fmt.Println("========================")
-	fmt.Println("Connecting to OUTB gateway at 127.0.0.1:14560...")
+	fmt.Printf("Connecting to OUTB gateway at %s...\n", *serverAddr)
 
-	conn, err := net.Dial("tcp", "127.0.0.1:14560")
+	conn, err := net.Dial("tcp", *serverAddr)
 	if err != nil {
 		fmt.Printf("Failed to connect: %v\n", err)
 		return
@@ -117,7 +131,7 @@ func main() {
 	// Send HELLO message
 	helloMsg := Message{
 		Type:     "hello",
-		DeviceID: "dji-test-001",
+		DeviceID: *deviceID,
 		Version:  "5.0.0",
 	}
 
@@ -137,11 +151,11 @@ func main() {
 	fmt.Printf("Received: %s\n", ackMsg.Type)
 
 	// Send some simulated telemetry data
-	fmt.Println("\nSending simulated telemetry (5 messages)...")
+	fmt.Printf("\nSending simulated telemetry (%d messages)...\n", *msgCount)
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < *msgCount; i++ {
 		state := DroneState{
-			DeviceID:       "dji-test-001",
+			DeviceID:       *deviceID,
 			Timestamp:      time.Now().UnixMilli(),
 			ProtocolSource: "dji_mobile_sdk",
 			Location: Location{

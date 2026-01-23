@@ -17,6 +17,8 @@ type mockProvider struct {
 	states       map[string]*models.DroneState
 	tracks       map[string][]trackstore.TrackPoint
 	trackEnabled bool
+	adapters     []string
+	publishers   []string
 }
 
 func newMockProvider() *mockProvider {
@@ -24,6 +26,8 @@ func newMockProvider() *mockProvider {
 		states:       make(map[string]*models.DroneState),
 		tracks:       make(map[string][]trackstore.TrackPoint),
 		trackEnabled: true,
+		adapters:     []string{},
+		publishers:   []string{},
 	}
 }
 
@@ -78,6 +82,14 @@ func (m *mockProvider) GetTrackSize(deviceID string) int {
 
 func (m *mockProvider) IsTrackEnabled() bool {
 	return m.trackEnabled
+}
+
+func (m *mockProvider) GetAdapterNames() []string {
+	return m.adapters
+}
+
+func (m *mockProvider) GetPublisherNames() []string {
+	return m.publishers
 }
 
 func (m *mockProvider) addState(state *models.DroneState) {
@@ -146,6 +158,69 @@ func TestHandleStatus(t *testing.T) {
 
 	if resp.Stats.ActiveDrones != 1 {
 		t.Errorf("Expected 1 active drone, got %d", resp.Stats.ActiveDrones)
+	}
+}
+
+func TestHandleStatusWithAdaptersAndPublishers(t *testing.T) {
+	provider := newMockProvider()
+	provider.adapters = []string{"mavlink", "dji"}
+	provider.publishers = []string{"mqtt", "gb28181"}
+
+	cfg := config.HTTPConfig{
+		Enabled:     true,
+		Address:     "127.0.0.1:0",
+		CORSEnabled: true,
+		CORSOrigins: []string{"*"},
+	}
+	server := New(cfg, provider, "test-version")
+
+	req := httptest.NewRequest("GET", "/api/v1/status", nil)
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var resp StatusResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	// Verify adapters
+	if len(resp.Adapters) != 2 {
+		t.Errorf("Expected 2 adapters, got %d", len(resp.Adapters))
+	}
+	expectedAdapters := map[string]bool{"mavlink": false, "dji": false}
+	for _, a := range resp.Adapters {
+		if _, ok := expectedAdapters[a.Name]; ok {
+			expectedAdapters[a.Name] = true
+		}
+		if !a.Enabled {
+			t.Errorf("Adapter %s should be enabled", a.Name)
+		}
+	}
+	for name, found := range expectedAdapters {
+		if !found {
+			t.Errorf("Expected adapter %s not found", name)
+		}
+	}
+
+	// Verify publishers
+	if len(resp.Publishers) != 2 {
+		t.Errorf("Expected 2 publishers, got %d", len(resp.Publishers))
+	}
+	expectedPublishers := map[string]bool{"mqtt": false, "gb28181": false}
+	for _, p := range resp.Publishers {
+		if _, ok := expectedPublishers[p]; ok {
+			expectedPublishers[p] = true
+		}
+	}
+	for name, found := range expectedPublishers {
+		if !found {
+			t.Errorf("Expected publisher %s not found", name)
+		}
 	}
 }
 

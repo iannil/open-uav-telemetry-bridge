@@ -22,7 +22,8 @@ type Config struct {
 
 // ServerConfig contains server-level settings
 type ServerConfig struct {
-	LogLevel string `yaml:"log_level"`
+	LogLevel      string `yaml:"log_level"`
+	LogBufferSize int    `yaml:"log_buffer_size"` // Number of log entries to keep in memory
 }
 
 // MAVLinkConfig contains MAVLink adapter settings
@@ -88,12 +89,28 @@ type ThrottleConfig struct {
 
 // HTTPConfig contains HTTP API server settings
 type HTTPConfig struct {
-	Enabled      bool       `yaml:"enabled"`
-	Address      string     `yaml:"address"`       // Listen address: "host:port"
-	CORSEnabled  bool       `yaml:"cors_enabled"`  // Enable CORS support
-	CORSOrigins  []string   `yaml:"cors_origins"`  // Allowed origins for CORS
-	WebUIEnabled bool       `yaml:"webui_enabled"` // Enable embedded Web UI
-	Auth         AuthConfig `yaml:"auth"`          // Authentication settings
+	Enabled      bool            `yaml:"enabled"`
+	Address      string          `yaml:"address"`       // Listen address: "host:port"
+	CORSEnabled  bool            `yaml:"cors_enabled"`  // Enable CORS support
+	CORSOrigins  []string        `yaml:"cors_origins"`  // Allowed origins for CORS
+	WebUIEnabled bool            `yaml:"webui_enabled"` // Enable embedded Web UI
+	Auth         AuthConfig      `yaml:"auth"`          // Authentication settings
+	TLS          TLSConfig       `yaml:"tls"`           // TLS/HTTPS settings
+	RateLimit    RateLimitConfig `yaml:"rate_limit"`    // Rate limiting settings
+}
+
+// TLSConfig contains TLS/HTTPS settings
+type TLSConfig struct {
+	Enabled  bool   `yaml:"enabled"`   // Enable TLS/HTTPS
+	CertFile string `yaml:"cert_file"` // Path to TLS certificate file
+	KeyFile  string `yaml:"key_file"`  // Path to TLS private key file
+}
+
+// RateLimitConfig contains API rate limiting settings
+type RateLimitConfig struct {
+	Enabled       bool    `yaml:"enabled"`         // Enable rate limiting
+	RequestsPerSec float64 `yaml:"requests_per_sec"` // Maximum requests per second per IP
+	BurstSize     int     `yaml:"burst_size"`      // Maximum burst size
 }
 
 // AuthConfig contains authentication settings
@@ -133,6 +150,9 @@ func Load(path string) (*Config, error) {
 	// Set defaults
 	if cfg.Server.LogLevel == "" {
 		cfg.Server.LogLevel = "info"
+	}
+	if cfg.Server.LogBufferSize == 0 {
+		cfg.Server.LogBufferSize = 1000
 	}
 	if cfg.DJI.ListenAddress == "" {
 		cfg.DJI.ListenAddress = "0.0.0.0:14560"

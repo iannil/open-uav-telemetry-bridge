@@ -3,6 +3,7 @@
 
 server:
   log_level: info  # debug, info, warn, error
+  log_buffer_size: 1000  # Number of log entries to keep in memory (for Web UI)
 
 # MAVLink Adapter Configuration
 mavlink:
@@ -57,8 +58,18 @@ http:
   enabled: true
   address: "0.0.0.0:8080"
   cors_enabled: true
-  cors_origins: ["*"]
+  cors_origins: ["http://localhost:3000"]  # Restrict to specific origins in production
   webui_enabled: true  # Enable embedded Web UI
+  # TLS/HTTPS Configuration
+  tls:
+    enabled: false       # Enable HTTPS
+    cert_file: ""        # Path to TLS certificate (e.g., "/etc/ssl/certs/server.crt")
+    key_file: ""         # Path to TLS private key (e.g., "/etc/ssl/private/server.key")
+  # Rate Limiting Configuration
+  rate_limit:
+    enabled: true        # Enable rate limiting
+    requests_per_sec: 100  # Maximum requests per second per IP
+    burst_size: 200      # Maximum burst size
   # Authentication Configuration
   auth:
     enabled: false       # Enable JWT authentication

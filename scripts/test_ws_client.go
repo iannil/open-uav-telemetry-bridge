@@ -1,11 +1,16 @@
 // +build ignore
 
 // WebSocket test client for OUTB gateway
-// Usage: go run scripts/test_ws_client.go
+// Usage: go run scripts/test_ws_client.go [options]
+//
+// Options:
+//   -addr string   Gateway address (default "127.0.0.1:8080")
+//   -path string   WebSocket path (default "/api/v1/ws")
 package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"net/url"
@@ -16,6 +21,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+var (
+	serverAddr = flag.String("addr", "127.0.0.1:8080", "Gateway address")
+	wsPath     = flag.String("path", "/api/v1/ws", "WebSocket path")
+)
+
 type WSMessage struct {
 	Type     string          `json:"type"`
 	DeviceID string          `json:"device_id,omitempty"`
@@ -23,13 +33,15 @@ type WSMessage struct {
 }
 
 func main() {
+	flag.Parse()
+
 	fmt.Println("WebSocket Test Client")
 	fmt.Println("=====================")
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	u := url.URL{Scheme: "ws", Host: "127.0.0.1:8080", Path: "/api/v1/ws"}
+	u := url.URL{Scheme: "ws", Host: *serverAddr, Path: *wsPath}
 	fmt.Printf("Connecting to %s...\n", u.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)

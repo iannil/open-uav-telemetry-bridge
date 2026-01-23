@@ -1,0 +1,1236 @@
+openapi: 3.0.3
+info:
+  title: Open-UAV-Telemetry-Bridge API
+  description: |
+    REST API for the Open-UAV-Telemetry-Bridge (OUTB) gateway.
+    Provides access to drone telemetry data, system status, configuration management,
+    alerts, geofences, and real-time WebSocket streaming.
+  version: 0.4.0
+  contact:
+    name: OUTB Project
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://your-server.example.com
+    description: Production server (HTTPS)
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Status
+    description: Gateway status and statistics
+  - name: Drones
+    description: Drone state and telemetry data
+  - name: Tracks
+    description: Historical trajectory data
+  - name: Authentication
+    description: JWT authentication endpoints
+  - name: Configuration
+    description: Runtime configuration management
+  - name: Logs
+    description: Log viewing and streaming
+  - name: Alerts
+    description: Alert management and rules
+  - name: Geofences
+    description: Geofence management and breaches
+  - name: WebSocket
+    description: Real-time data streaming
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Returns OK if the server is running
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: OK
+
+  /api/v1/status:
+    get:
+      tags:
+        - Status
+      summary: Get gateway status
+      description: Returns gateway version, uptime, and statistics
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        '200':
+          description: Gateway status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/drones:
+    get:
+      tags:
+        - Drones
+      summary: List all drones
+      description: Returns all currently known drone states
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        '200':
+          description: List of drone states
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DronesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/drones/{deviceID}:
+    get:
+      tags:
+        - Drones
+      summary: Get drone by ID
+      description: Returns the state of a specific drone
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: deviceID
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Drone device ID
+          example: drone-001
+      responses:
+        '200':
+          description: Drone state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DroneState'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/drones/{deviceID}/track:
+    get:
+      tags:
+        - Tracks
+      summary: Get drone track
+      description: Returns historical trajectory points for a drone
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: deviceID
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Drone device ID
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+          description: Maximum number of points to return
+        - name: since
+          in: query
+          schema:
+            type: integer
+            format: int64
+          description: Unix timestamp (ms) - only return points after this time
+      responses:
+        '200':
+          description: Track points
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: Track storage is disabled
+    delete:
+      tags:
+        - Tracks
+      summary: Clear drone track
+      description: Deletes all historical trajectory points for a drone
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: deviceID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Track cleared successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: Track storage is disabled
+
+  /api/v1/auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login
+      description: Authenticate and receive a JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+
+  /api/v1/auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout
+      description: Logout (client should discard token)
+      responses:
+        '200':
+          description: Logout successful
+
+  /api/v1/auth/me:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user
+      description: Returns information about the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/config:
+    get:
+      tags:
+        - Configuration
+      summary: Get configuration
+      description: Returns the current gateway configuration (sensitive fields redacted)
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        '200':
+          description: Current configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/logs:
+    get:
+      tags:
+        - Logs
+      summary: Get logs
+      description: Returns recent log entries from the buffer
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [debug, info, warn, error]
+          description: Minimum log level to return
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+          description: Maximum number of entries to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Number of entries to skip
+      responses:
+        '200':
+          description: Log entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags:
+        - Logs
+      summary: Clear logs
+      description: Clears all log entries from the buffer
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        '204':
+          description: Logs cleared
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/logs/stream:
+    get:
+      tags:
+        - Logs
+      summary: Stream logs (SSE)
+      description: Server-Sent Events stream of real-time log entries
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        '200':
+          description: SSE stream of log entries
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/v1/alerts:
+    get:
+      tags:
+        - Alerts
+      summary: List alerts
+      description: Returns all alerts with optional filtering
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [info, warning, critical]
+        - name: acknowledged
+          in: query
+          schema:
+            type: boolean
+        - name: device_id
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Alert list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags:
+        - Alerts
+      summary: Clear alerts
+      description: Clears all alerts
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        '204':
+          description: Alerts cleared
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/alerts/{id}:
+    get:
+      tags:
+        - Alerts
+      summary: Get alert by ID
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Alert details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/alerts/{id}/ack:
+    post:
+      tags:
+        - Alerts
+      summary: Acknowledge alert
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Alert acknowledged
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/alerts/rules:
+    get:
+      tags:
+        - Alerts
+      summary: List alert rules
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        '200':
+          description: Alert rules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRulesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Alerts
+      summary: Create alert rule
+      security:
+        - bearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertRule'
+      responses:
+        '201':
+          description: Rule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/geofences:
+    get:
+      tags:
+        - Geofences
+      summary: List geofences
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        '200':
+          description: Geofence list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeofencesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Geofences
+      summary: Create geofence
+      security:
+        - bearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Geofence'
+      responses:
+        '201':
+          description: Geofence created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Geofence'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/geofences/{id}:
+    get:
+      tags:
+        - Geofences
+      summary: Get geofence by ID
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Geofence details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Geofence'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags:
+        - Geofences
+      summary: Update geofence
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Geofence'
+      responses:
+        '200':
+          description: Geofence updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Geofence'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags:
+        - Geofences
+      summary: Delete geofence
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Geofence deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/geofences/breaches:
+    get:
+      tags:
+        - Geofences
+      summary: List geofence breaches
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: geofence_id
+          in: query
+          schema:
+            type: string
+        - name: device_id
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Breach list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreachesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags:
+        - Geofences
+      summary: Clear breaches
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        '204':
+          description: Breaches cleared
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/ws:
+    get:
+      tags:
+        - WebSocket
+      summary: WebSocket connection
+      description: |
+        Establishes a WebSocket connection for real-time drone state updates.
+
+        Message types received:
+        - `state_update`: Drone state changed
+        - `drone_online`: New drone connected
+        - `drone_offline`: Drone disconnected
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        '101':
+          description: Switching to WebSocket protocol
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/v1/auth/login
+
+  responses:
+    Unauthorized:
+      description: Authentication required or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: drone not found
+        device_id:
+          type: string
+          example: drone-001
+
+    StatusResponse:
+      type: object
+      properties:
+        version:
+          type: string
+          example: 0.4.0-dev
+        uptime_seconds:
+          type: integer
+          format: int64
+          example: 3600
+        adapters:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdapterStatus'
+        publishers:
+          type: array
+          items:
+            type: string
+          example: [mqtt, gb28181]
+        stats:
+          $ref: '#/components/schemas/Stats'
+
+    AdapterStatus:
+      type: object
+      properties:
+        name:
+          type: string
+          example: mavlink
+        enabled:
+          type: boolean
+          example: true
+
+    Stats:
+      type: object
+      properties:
+        active_drones:
+          type: integer
+          example: 5
+        websocket_clients:
+          type: integer
+          example: 2
+
+    DroneState:
+      type: object
+      required:
+        - device_id
+        - timestamp
+        - protocol_source
+        - location
+        - attitude
+        - velocity
+        - status
+      properties:
+        device_id:
+          type: string
+          example: drone-001
+        timestamp:
+          type: integer
+          format: int64
+          description: Unix timestamp in milliseconds
+          example: 1705833600000
+        protocol_source:
+          type: string
+          enum: [mavlink, dji_mobile_sdk]
+          example: mavlink
+        location:
+          $ref: '#/components/schemas/Location'
+        attitude:
+          $ref: '#/components/schemas/Attitude'
+        velocity:
+          $ref: '#/components/schemas/Velocity'
+        status:
+          $ref: '#/components/schemas/Status'
+
+    Location:
+      type: object
+      properties:
+        lat:
+          type: number
+          format: double
+          description: Latitude (WGS84)
+          example: 39.9042
+        lon:
+          type: number
+          format: double
+          description: Longitude (WGS84)
+          example: 116.4074
+        alt_baro:
+          type: number
+          format: double
+          description: Barometric altitude in meters
+          example: 100.5
+        alt_gnss:
+          type: number
+          format: double
+          description: GNSS altitude in meters
+          example: 105.2
+        coordinate_system:
+          type: string
+          example: WGS84
+        gcj02:
+          $ref: '#/components/schemas/ConvertedCoordinate'
+        bd09:
+          $ref: '#/components/schemas/ConvertedCoordinate'
+
+    ConvertedCoordinate:
+      type: object
+      properties:
+        lat:
+          type: number
+          format: double
+        lon:
+          type: number
+          format: double
+
+    Attitude:
+      type: object
+      properties:
+        roll:
+          type: number
+          format: double
+          description: Roll angle in degrees
+          example: 2.5
+        pitch:
+          type: number
+          format: double
+          description: Pitch angle in degrees
+          example: -1.5
+        yaw:
+          type: number
+          format: double
+          description: Yaw angle in degrees (0-360)
+          example: 45.0
+
+    Velocity:
+      type: object
+      properties:
+        vx:
+          type: number
+          format: double
+          description: Velocity X in m/s
+          example: 5.0
+        vy:
+          type: number
+          format: double
+          description: Velocity Y in m/s
+          example: 3.0
+        vz:
+          type: number
+          format: double
+          description: Velocity Z in m/s (positive = down)
+          example: -1.0
+
+    Status:
+      type: object
+      properties:
+        armed:
+          type: boolean
+          example: true
+        flight_mode:
+          type: string
+          example: LOITER
+        battery_percent:
+          type: number
+          format: double
+          example: 75.5
+        battery_voltage:
+          type: number
+          format: double
+          example: 22.4
+        gps_fix_type:
+          type: integer
+          example: 3
+        satellites_visible:
+          type: integer
+          example: 12
+
+    DronesResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 2
+        drones:
+          type: array
+          items:
+            $ref: '#/components/schemas/DroneState'
+
+    TrackPoint:
+      type: object
+      properties:
+        timestamp:
+          type: integer
+          format: int64
+        lat:
+          type: number
+          format: double
+        lon:
+          type: number
+          format: double
+        alt:
+          type: number
+          format: double
+
+    TrackResponse:
+      type: object
+      properties:
+        device_id:
+          type: string
+        count:
+          type: integer
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrackPoint'
+        total_size:
+          type: integer
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: admin
+        password:
+          type: string
+          format: password
+          example: admin123
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT token
+        expires_at:
+          type: integer
+          format: int64
+          description: Token expiry as Unix timestamp
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        username:
+          type: string
+        role:
+          type: string
+
+    AuthStatusResponse:
+      type: object
+      properties:
+        auth_enabled:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/User'
+        message:
+          type: string
+
+    LogEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        timestamp:
+          type: integer
+          format: int64
+        level:
+          type: string
+          enum: [debug, info, warn, error]
+        source:
+          type: string
+        message:
+          type: string
+
+    LogsResponse:
+      type: object
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogEntry'
+        count:
+          type: integer
+        total:
+          type: integer
+
+    Alert:
+      type: object
+      properties:
+        id:
+          type: string
+        rule_id:
+          type: string
+        type:
+          type: string
+          enum: [battery_low, connection_lost, signal_weak, geofence_breach, custom]
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        device_id:
+          type: string
+        message:
+          type: string
+        value:
+          type: number
+        threshold:
+          type: number
+        timestamp:
+          type: integer
+          format: int64
+        acknowledged:
+          type: boolean
+        acked_at:
+          type: integer
+          format: int64
+        acked_by:
+          type: string
+
+    AlertsResponse:
+      type: object
+      properties:
+        alerts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Alert'
+        count:
+          type: integer
+        stats:
+          type: object
+          properties:
+            total_alerts:
+              type: integer
+            unacknowledged:
+              type: integer
+            rules_count:
+              type: integer
+            devices_with_alerts:
+              type: integer
+
+    AlertRule:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [battery_low, connection_lost, signal_weak, geofence_breach, custom]
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        enabled:
+          type: boolean
+        condition:
+          $ref: '#/components/schemas/AlertCondition'
+        cooldown_ms:
+          type: integer
+
+    AlertCondition:
+      type: object
+      properties:
+        field:
+          type: string
+          example: status.battery_percent
+        operator:
+          type: string
+          enum: ['<', '<=', '>', '>=', '==', '!=']
+        threshold:
+          type: number
+          example: 20
+
+    AlertRulesResponse:
+      type: object
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertRule'
+        count:
+          type: integer
+
+    Geofence:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          example: Restricted Area 1
+        type:
+          type: string
+          enum: [polygon, circle]
+        coordinates:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+          description: Array of [lat, lon] pairs for polygon
+        center:
+          type: array
+          items:
+            type: number
+          description: "[lat, lon] for circle center"
+        radius:
+          type: number
+          description: Radius in meters for circle
+        min_altitude:
+          type: number
+        max_altitude:
+          type: number
+        alert_on_enter:
+          type: boolean
+        alert_on_exit:
+          type: boolean
+        enabled:
+          type: boolean
+
+    GeofencesResponse:
+      type: object
+      properties:
+        geofences:
+          type: array
+          items:
+            $ref: '#/components/schemas/Geofence'
+        count:
+          type: integer
+
+    GeofenceBreach:
+      type: object
+      properties:
+        id:
+          type: string
+        geofence_id:
+          type: string
+        device_id:
+          type: string
+        type:
+          type: string
+          enum: [enter, exit]
+        lat:
+          type: number
+          format: double
+        lon:
+          type: number
+          format: double
+        alt:
+          type: number
+          format: double
+        timestamp:
+          type: integer
+          format: int64
+
+    BreachesResponse:
+      type: object
+      properties:
+        breaches:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeofenceBreach'
+        count:
+          type: integer
+
+    AppConfig:
+      type: object
+      description: Gateway configuration (sensitive fields redacted)
+      properties:
+        server:
+          type: object
+          properties:
+            log_level:
+              type: string
+        mavlink:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            connection_type:
+              type: string
+            address:
+              type: string
+        dji:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            listen_address:
+              type: string
+            max_clients:
+              type: integer
+        mqtt:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            broker:
+              type: string
+            topic_prefix:
+              type: string
+        http:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            address:
+              type: string
+            cors_enabled:
+              type: boolean
+        throttle:
+          type: object
+          properties:
+            default_rate_hz:
+              type: number
+            min_rate_hz:
+              type: number
+            max_rate_hz:
+              type: number
+        coordinate:
+          type: object
+          properties:
+            convert_gcj02:
+              type: boolean
+            convert_bd09:
+              type: boolean
+        track:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            max_points_per_drone:
+              type: integer
+            sample_interval_ms:
+              type: integer
+
+    WSMessage:
+      type: object
+      description: WebSocket message format
+      properties:
+        type:
+          type: string
+          enum: [state_update, drone_online, drone_offline]
+        device_id:
+          type: string
+        data:
+          $ref: '#/components/schemas/DroneState'

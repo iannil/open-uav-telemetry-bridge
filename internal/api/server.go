@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/open-uav/telemetry-bridge/internal/api/auth"
 	"github.com/open-uav/telemetry-bridge/internal/api/handlers"
+	"github.com/open-uav/telemetry-bridge/internal/api/ratelimit"
 	"github.com/open-uav/telemetry-bridge/internal/config"
 	"github.com/open-uav/telemetry-bridge/internal/core/alerter"
 	"github.com/open-uav/telemetry-bridge/internal/core/geofence"
@@ -32,6 +33,8 @@ type StateProvider interface {
 	ClearTrack(deviceID string)
 	GetTrackSize(deviceID string) int
 	IsTrackEnabled() bool
+	GetAdapterNames() []string
+	GetPublisherNames() []string
 }
 
 // Server is the HTTP API server
@@ -93,9 +96,13 @@ func NewWithConfig(cfg config.HTTPConfig, fullConfig *config.Config, configPath 
 	}
 
 	// Initialize log buffer and handler (always enabled)
-	s.logBuffer = logger.New(1000) // Store last 1000 log entries
+	logBufferSize := 1000 // Default value
+	if fullConfig != nil && fullConfig.Server.LogBufferSize > 0 {
+		logBufferSize = fullConfig.Server.LogBufferSize
+	}
+	s.logBuffer = logger.New(logBufferSize)
 	s.logsHandler = handlers.NewLogsHandler(s.logBuffer)
-	log.Printf("[HTTP] Log buffer enabled (capacity: 1000)")
+	log.Printf("[HTTP] Log buffer enabled (capacity: %d)", logBufferSize)
 
 	// Initialize alerter (always enabled)
 	s.alerter = alerter.New(alerter.Config{MaxAlerts: 1000})
@@ -121,6 +128,21 @@ func (s *Server) setupRouter() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
+
+	// Rate Limiting
+	if s.cfg.RateLimit.Enabled {
+		requestsPerSec := s.cfg.RateLimit.RequestsPerSec
+		if requestsPerSec <= 0 {
+			requestsPerSec = 100 // Default: 100 requests per second
+		}
+		burstSize := s.cfg.RateLimit.BurstSize
+		if burstSize <= 0 {
+			burstSize = 200 // Default: burst size of 200
+		}
+		limiter := ratelimit.NewIPRateLimiter(requestsPerSec, burstSize)
+		r.Use(ratelimit.Middleware(limiter))
+		log.Printf("[HTTP] Rate limiting enabled (%.0f req/s, burst %d)", requestsPerSec, burstSize)
+	}
 
 	// CORS
 	if s.cfg.CORSEnabled {
@@ -260,9 +282,16 @@ func (s *Server) Start(ctx context.Context) error {
 	go s.hub.Run()
 
 	go func() {
-		log.Printf("[HTTP] Server listening on %s", s.cfg.Address)
-		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("[HTTP] Server error: %v", err)
+		if s.cfg.TLS.Enabled {
+			log.Printf("[HTTP] HTTPS server listening on %s (TLS enabled)", s.cfg.Address)
+			if err := s.server.ListenAndServeTLS(s.cfg.TLS.CertFile, s.cfg.TLS.KeyFile); err != nil && err != http.ErrServerClosed {
+				log.Printf("[HTTP] Server error: %v", err)
+			}
+		} else {
+			log.Printf("[HTTP] Server listening on %s", s.cfg.Address)
+			if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Printf("[HTTP] Server error: %v", err)
+			}
 		}
 	}()
 
@@ -325,11 +354,21 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	// Build adapter status list from provider
+	adapterNames := s.provider.GetAdapterNames()
+	adapters := make([]AdapterStatus, len(adapterNames))
+	for i, name := range adapterNames {
+		adapters[i] = AdapterStatus{
+			Name:    name,
+			Enabled: true, // All registered adapters are enabled
+		}
+	}
+
 	resp := StatusResponse{
 		Version:       s.version,
 		UptimeSeconds: int64(time.Since(s.started).Seconds()),
-		Adapters:      []AdapterStatus{}, // Would need to be passed from engine
-		Publishers:    []string{},        // Would need to be passed from engine
+		Adapters:      adapters,
+		Publishers:    s.provider.GetPublisherNames(),
 		Stats: Stats{
 			ActiveDrones:     s.provider.GetDeviceCount(),
 			WebSocketClients: s.hub.ClientCount(),

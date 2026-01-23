@@ -239,3 +239,21 @@ func (e *Engine) GetTrackSize(deviceID string) int {
 func (e *Engine) IsTrackEnabled() bool {
 	return e.trackStore != nil
 }
+
+// GetAdapterNames returns the names of all registered adapters
+func (e *Engine) GetAdapterNames() []string {
+	names := make([]string, len(e.adapters))
+	for i, adapter := range e.adapters {
+		names[i] = adapter.Name()
+	}
+	return names
+}
+
+// GetPublisherNames returns the names of all registered publishers
+func (e *Engine) GetPublisherNames() []string {
+	names := make([]string, len(e.publishers))
+	for i, pub := range e.publishers {
+		names[i] = pub.Name()
+	}
+	return names
+}
